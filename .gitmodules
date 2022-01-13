@@ -1,6 +1,3 @@
 [submodule "flagser"]
 	path = flagser
 	url = https://github.com/luetge/flagser
-[submodule "mcmc_sampling_examples"]
-	path = mcmc_sampling_examples
-	url = https://github.com/flomlo/mcmc_sampling_examples
