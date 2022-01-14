@@ -1,17 +1,24 @@
 use std::marker::PhantomData;
 
+
 use rand;
 use rand::prelude::*;
 
 pub mod flagser;
+pub mod io;
 
 type Node = u32;
 type CliqueId = usize;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DirectedGraph {
     adjmat: Vec<bool>,
     nnodes: usize,
+}
+impl std::fmt::Debug for DirectedGraph{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        return write!(f, "A graph with {} nodes and the following edges: {:?}", self.nnodes, self.edges());
+    }
 }
 
 impl DirectedGraph {
@@ -44,23 +51,26 @@ impl DirectedGraph {
     }
 
     pub fn subgraph(&self, vertices: &[Node]) -> DirectedGraph {
-        let mut  sub = DirectedGraph::new_disconnected(vertices.len());
+        // macht komische dinge wenn Vertices in dem Slice doppelt vorkommen
+        // FIXME?
+        let mut sub = DirectedGraph::new_disconnected(vertices.len());
         for (new_from, &ori_from) in (0..).zip(vertices.iter()) {
             for (new_to, &ori_to) in (0..).zip(vertices.iter()) {
                 *sub.edge_mut(new_from, new_to) = self.edge(ori_from, ori_to);
             }
         }
-        sub
+        return sub;
     }
 
     pub fn compute_maximal_cliques(&self) -> Vec<Vec<Node>> {
-
+        // TODO: Kommentierung
+        // undirected flagser statt eigenbau?
         let mut r = vec![];
         let x = vec![];
         let p = (0..(self.nnodes as Node)).collect();
         let mut res = vec![];
         self.bron_kerbosch(&mut r, p, x, &mut res);
-        res
+        return res;
     }
     /// recursion for compute_maximal_cliques
     fn bron_kerbosch(&self, r: &mut Vec<Node>, p: Vec<Node>, mut x: Vec<Node>, res: &mut Vec<Vec<Node>>) {
@@ -90,7 +100,8 @@ impl DirectedGraph {
             x.push(v);
         }
     }
-    pub fn flagser_count(&self) -> Vec<usize> {
+
+    pub fn edges(&self) -> Vec<[Node; 2]> {
         let mut edges = vec![];
         for from in 0..(self.nnodes as Node) {
             for to in 0..(self.nnodes as Node) {
@@ -99,7 +110,11 @@ impl DirectedGraph {
                 }
             }
         }
-        flagser::count_unweighted(self.nnodes, &edges)
+        return edges
+    }
+
+    pub fn flagser_count(&self) -> Vec<usize> {
+        flagser::count_unweighted(self.nnodes, &self.edges())
     }
 }
 
@@ -113,6 +128,7 @@ pub struct State {
     pub flag_count_max: Vec<usize>,
 }
 
+#[derive(Clone, Debug)]
 pub struct Shuffling(CliqueId, Vec<usize>);
 
 impl State {
@@ -125,9 +141,11 @@ impl State {
             }
         }
         let flag_count = graph.flagser_count();
-        let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| *x * 2).collect();
+        let bandwidth = 1.2;
+        let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| (*x as f64 * bandwidth) as usize).collect();
         flag_count_max.push(2); // some higher dimensional simplices should be ok
-        let flag_count_min: Vec<_> = flag_count.iter().map(|x| *x / 2).collect();
+        let flag_count_min: Vec<_> = flag_count.iter().map(|x| (*x as f64 / bandwidth) as usize).collect();
+        println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
 
         State { graph, cliques, which_cliques, flag_count, flag_count_min, flag_count_max}
     }
@@ -138,11 +156,12 @@ impl State {
         perm.shuffle(rng);
         Shuffling(cid, perm)
     }
-    pub fn apply_shuffle(&mut self, s: &Shuffling) {
+    pub fn apply_shuffling(&mut self, s: &Shuffling) {
         let Shuffling(cid, perm) = s;
         let cid = *cid;
 
         let pre = self.clique_neighborhood(cid).flagser_count();
+        //println!("{:?}", &self.clique_neighborhood(cid));
         for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
             assert!(*s >= *p);
             *s -= *p;
@@ -217,7 +236,7 @@ fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
     let left = a.iter().chain(std::iter::repeat(z));
     let right = b.iter().chain(std::iter::repeat(z));
     for (l,r) in left.zip(right).take(maxlen) {
-        if r > l {
+        if l > r {
             return false;
         }
     }
@@ -311,7 +330,16 @@ pub mod examples {
         // 0,1,2
 
         // 4 is left over and maximal
-        g
+        return g
+    }
+
+    pub fn gengraph2() -> DirectedGraph {
+        // simplest of all simplices of dimension 2
+        let mut g = DirectedGraph::new_disconnected(3);
+        g.add_edge(0,1);
+        g.add_edge(0,2);
+        g.add_edge(1,2);
+        return g
     }
 }
 
@@ -331,12 +359,16 @@ pub trait MarcovState {
 
 impl Action<State> for Shuffling {
     fn reverse(mut self) -> Self{
-        self.1.reverse();
-        self
+        let Shuffling(cid,perm) = self;
+        let mut inverse = vec![0; perm.len()];
+        for i in 0 .. perm.len() {
+            inverse[perm[i]] = i;
+        }
+        return Shuffling(cid, inverse);
     }
 
     fn apply(&self, state: &mut State) {
-         state.apply_shuffle(self);
+         state.apply_shuffling(self);
     }
     fn gen<R: Rng>(state: &State, rng: &mut R) -> Shuffling {
         state.sample_shuffling(rng)
@@ -353,7 +385,9 @@ pub struct MCMCSampler<S: MarcovState, R: Rng, A: Action<S>> {
     pub _a: PhantomData<A>
 }
 
-impl<State: MarcovState+Clone, R, A> MCMCSampler<State, R, A> where A: Action<State>, R: Rng{
+impl<State: MarcovState+Clone, R, A> MCMCSampler<State, R, A>
+    where A: Action<State> + std::fmt::Debug, R: Rng
+{
     pub fn burn_in(&mut self) {
         while self.burn_in > 0 {
             self.burn_in -= 1;
@@ -368,6 +402,7 @@ impl<State: MarcovState+Clone, R, A> MCMCSampler<State, R, A> where A: Action<St
     pub fn next(&mut self) -> State{
         for _ in 0..self.sample_distance {
             let a = A::gen(&self.state, &mut self.rng);
+            //println!("{:?}", &a);
             self.state.apply(&a);
             self.sampled += 1;
             if self.state.valid() {
