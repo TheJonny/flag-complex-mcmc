@@ -12,3 +12,6 @@ rand = "*"
 [build-dependencies]
 #bindgen = "*"
 cc = "*"
+
+[profile.release]
+#debug = true
