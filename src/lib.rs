@@ -141,10 +141,10 @@ impl State {
             }
         }
         let flag_count = graph.flagser_count();
-        let bandwidth = 1.01;
-        let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| (*x as f64 * bandwidth) as usize).collect();
+        let bandwidth = 1.10;
+        let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| (*x as f64 * bandwidth + 10.) as usize).collect();
         flag_count_max.push(2); // some higher dimensional simplices should be ok
-        let flag_count_min: Vec<_> = flag_count.iter().map(|x| (*x as f64 / bandwidth) as usize).collect();
+        let flag_count_min: Vec<_> = flag_count.iter().map(|x| (*x as f64 / bandwidth - 10.) as usize).collect();
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
 
         State { graph, cliques, which_cliques, flag_count, flag_count_min, flag_count_max}
