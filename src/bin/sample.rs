@@ -16,6 +16,10 @@ struct Args{
     #[clap(short, long, default_value_t = 0)]
     seed: u64,
 
+    /// number of samples to draw
+    #[clap(short, long, default_value_t = 1000)]
+    number_of_samples: usize,
+
     /// burn_in: number of steps to burn in MCMC sampler
     #[clap(long, default_value_t = 5000)]
     burn_in: usize,
@@ -41,9 +45,9 @@ fn main() {
     let rng = rand::rngs::StdRng::seed_from_u64(args.seed);
     let mut sampler = MCMCSampler {state: st, burn_in: args.burn_in, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng, _a: PhantomData::<Shuffling>::default() };
     sampler.burn_in();
-    for i in 0..1000 {
+    for i in 0..args.number_of_samples {
         let s = sampler.next();
-        io::save_flag_file(&format!("{}-{}-{}", args.input, args.seed, i), &s.graph);
+        io::save_flag_file(&format!("{}-{:03}-{:03}", args.input, args.seed, i), &s.graph);
         dbg!(sampler.acceptance_ratio());
         println!("flag count: {:?}", s.flag_count);
     }
