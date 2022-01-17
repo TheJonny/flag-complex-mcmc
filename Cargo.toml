@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 libc = "*"
 rand = "*"
+clap = { version = "3.0.8", features = ["derive"] }
 
 [build-dependencies]
 #bindgen = "*"
