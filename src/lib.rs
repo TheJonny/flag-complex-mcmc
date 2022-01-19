@@ -141,10 +141,10 @@ impl State {
             }
         }
         let flag_count = graph.flagser_count();
-        let bandwidth = 1.01;
-        let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| (*x as f64 * bandwidth) as usize).collect();
+        let bandwidth = 1.10;
+        let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| (*x as f64 * bandwidth + 10.) as usize).collect();
         flag_count_max.push(2); // some higher dimensional simplices should be ok
-        let flag_count_min: Vec<_> = flag_count.iter().map(|x| (*x as f64 / bandwidth) as usize).collect();
+        let flag_count_min: Vec<_> = flag_count.iter().map(|x| (*x as f64 / bandwidth - 10.) as usize).collect();
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
 
         State { graph, cliques, which_cliques, flag_count, flag_count_min, flag_count_max}
@@ -159,9 +159,10 @@ impl State {
     pub fn apply_shuffling(&mut self, s: &Shuffling) {
         let Shuffling(cid, perm) = s;
         let cid = *cid;
-
-        let pre = self.clique_neighborhood(cid).flagser_count();
+        let cn = self.clique_neighborhood(cid);
+        let pre = cn.flagser_count();
         //println!("{:?}", &self.clique_neighborhood(cid));
+        //dbg!(cn.nnodes);
         for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
             assert!(*s >= *p);
             *s -= *p;
@@ -189,6 +190,7 @@ impl State {
             }
         }
 
+        // TODO: vertices der neighbourhood müssen nicht neu gesucht werden, kann man speichern
         let post = self.clique_neighborhood(cid).flagser_count();
         if post.len() > self.flag_count.len() {
             self.flag_count.resize(post.len(), 0);
@@ -345,7 +347,7 @@ pub mod examples {
 
 pub trait Action<State : ?Sized> {
     //type State;
-    fn reverse(self) -> Self;
+    fn reverse(&self) -> Self;
     fn apply(&self, state: &mut State);
     fn gen<R: Rng>(state: &State, rng: &mut R) -> Self;
 }
@@ -358,13 +360,13 @@ pub trait MarcovState {
 }
 
 impl Action<State> for Shuffling {
-    fn reverse(mut self) -> Self{
+    fn reverse(&self) -> Self{
         let Shuffling(cid,perm) = self;
         let mut inverse = vec![0; perm.len()];
         for i in 0 .. perm.len() {
             inverse[perm[i]] = i;
         }
-        return Shuffling(cid, inverse);
+        return Shuffling(*cid, inverse);
     }
 
     fn apply(&self, state: &mut State) {

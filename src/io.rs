@@ -20,3 +20,15 @@ pub fn read_flag_file(fname:&str) -> DirectedGraph {
     }
     return graph;
 }
+
+
+pub fn save_flag_file(fname:&str, graph:&DirectedGraph) -> std::io::Result<()> {
+    let mut content = "dim 0:\n".to_string();
+    content += &("1 ".repeat(graph.nnodes).trim_end().to_owned() + "\n"); // add vertices
+    content += "dim 1:\n";
+    for [i,j] in graph.edges() {
+        content += &(format!("{} {} 1\n", i, j));
+    }
+    std::fs::write(fname, content).expect("Unable to write file");
+    return Ok(());
+}
