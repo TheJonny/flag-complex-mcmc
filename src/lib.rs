@@ -208,14 +208,15 @@ impl State {
         // which cliques are affected, when the edges in the clique "cid" are shuffled?
         // therefore count how many vertices they have in common with cid
         let mut affected_cids = vec![cid];
-        let mut neigh_cliq_count = vec![0; self.cliques.len()];
+        //let mut neigh_cliq_count = vec![0; self.cliques.len()];
+        let mut neigh_cliqs = std::collections::HashSet::new();
         for &v in &self.cliques[cid as usize] {
             for &vcid in &self.which_cliques[v as usize] {
                 if vcid != cid {
-                    neigh_cliq_count[vcid as usize] += 1;
-                    if neigh_cliq_count[vcid as usize] == 2 {
+                    if neigh_cliqs.contains(&vcid) {
                         affected_cids.push(vcid);
                     }
+                    neigh_cliqs.insert(vcid);
                 }
             }
         }
