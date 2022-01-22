@@ -4,11 +4,18 @@ use std::marker::PhantomData;
 use rand;
 use rand::prelude::*;
 
+use rayon::prelude::*;
+
 pub mod flagser;
 pub mod io;
 
+mod util;
+
 type Node = u32;
 type CliqueId = usize;
+type Edge = [Node; 2];
+
+
 
 #[derive(Clone)]
 pub struct DirectedGraph {
@@ -116,12 +123,72 @@ impl DirectedGraph {
     pub fn flagser_count(&self) -> Vec<usize> {
         flagser::count_unweighted(self.nnodes, &self.edges())
     }
+
+    pub fn iter_nodes(&self) -> impl Iterator<Item=Node> {
+        (0.. (self.nnodes as Node)).into_iter()
+    }
+
+    /// for every edge, this gathers the nodes that are connected to both ends.
+    fn compute_edge_neighborhoods(&self) -> Vec<Vec<Node>>{
+        // TODO: be better than |V|^3!!
+        // TODO: parallelize
+        let mut undirected_adj_lists = vec![vec![]; self.nnodes];
+        let mut undirected_edges = self.edges();
+        use std::cmp::{min, max};
+        for e in &mut undirected_edges {
+            let a = max(e[0], e[1]);
+            let b = min(e[0], e[1]);
+            *e = [a, b];
+        }
+        undirected_edges.sort_unstable();
+        undirected_edges.dedup();
+
+        for [a,b] in self.edges() {
+            undirected_adj_lists[a as usize].push(b);
+            undirected_adj_lists[b as usize].push(a);
+        }
+        for v in &mut undirected_adj_lists {
+            v.sort_unstable();
+        }
+        
+        let mut respairs = vec![];
+        undirected_edges.par_iter().map(|&[a, b]| {
+            assert!(a > b);
+
+            let mut l = util::intersect_sorted(&undirected_adj_lists[a as usize], &undirected_adj_lists[b as usize]);
+            l.shrink_to_fit();
+            (edge_id(a, b), l)
+        }).collect_into_vec(&mut respairs);
+        let mut res = vec![vec![]; self.nnodes * (self.nnodes-1) / 2];
+        for (eid, l) in respairs {
+            res[eid] = l;
+        }
+        
+        return res;
+    }
+}
+
+/// undirected edge pair to index in triangular adjacency matrix
+/// ```
+/// use directed_scm::*;
+/// assert_eq!(edge_id(1, 0), 0);
+/// assert_eq!(edge_id(2, 0), 1);
+/// assert_eq!(edge_id(2, 1), 2);
+/// assert_eq!(edge_id(3, 0), 3);
+/// assert_eq!(edge_id(3, 1), 4);
+/// assert_eq!(edge_id(3, 2), 5);
+/// ```
+pub fn edge_id(a: Node, b: Node) -> usize{
+    assert!(a > b);
+    return (a as usize) * ((a as usize)-1) / 2 + (b as usize);
+    
 }
 
 #[derive(Clone, Debug)]
 pub struct State {
     pub cliques: Vec<Vec<Node>>,
     pub which_cliques: Vec<Vec<CliqueId>>,
+    pub edge_neighborhood: Vec<Vec<Node>>,
     pub graph: DirectedGraph,
     pub flag_count: Vec<usize>,
     pub flag_count_min: Vec<usize>,
@@ -133,6 +200,8 @@ pub struct Shuffling(CliqueId, Vec<usize>);
 
 impl State {
     pub fn new(graph: DirectedGraph) -> Self {
+
+        println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
         let mut which_cliques = vec![Vec::new(); graph.nnodes];
         for (c,cid) in cliques.iter().zip(0..) {
@@ -140,6 +209,7 @@ impl State {
                 which_cliques[v as usize].push(cid);
             }
         }
+        println!("initial flagser");
         let flag_count = graph.flagser_count();
         let bandwidth = 1.10;
         let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| (*x as f64 * bandwidth + 10.) as usize).collect();
@@ -147,7 +217,10 @@ impl State {
         let flag_count_min: Vec<_> = flag_count.iter().map(|x| (*x as f64 / bandwidth - 10.) as usize).collect();
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
 
-        State { graph, cliques, which_cliques, flag_count, flag_count_min, flag_count_max}
+        println!("computing edge neighborhoods");
+        let edge_neighborhood = graph.compute_edge_neighborhoods();
+
+        State { graph, cliques, which_cliques, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
     }
     pub fn sample_shuffling<R: Rng>(&self, rng: &mut R) -> Shuffling {
         let cid = rng.gen_range(0..self.cliques.len() as CliqueId);
@@ -160,7 +233,7 @@ impl State {
         let Shuffling(cid, perm) = s;
         let cid = *cid;
         let cn = self.clique_neighborhood(cid);
-        let pre = cn.flagser_count();
+        let pre = self.graph.subgraph(&cn).flagser_count();
         //println!("{:?}", &self.clique_neighborhood(cid));
         //dbg!(cn.nnodes);
         for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
@@ -191,7 +264,7 @@ impl State {
         }
 
         // TODO: vertices der neighbourhood müssen nicht neu gesucht werden, kann man speichern
-        let post = self.clique_neighborhood(cid).flagser_count();
+        let post = self.graph.subgraph(&cn).flagser_count();
         if post.len() > self.flag_count.len() {
             self.flag_count.resize(post.len(), 0);
         }
@@ -203,34 +276,19 @@ impl State {
 
     /// returns the subgraph affected by shuffling vertices/edges in clique cid.
     /// it consists of all cliques, that share at least one edge with cid.
-    pub fn clique_neighborhood(&self, cid: CliqueId) -> DirectedGraph {
+    pub fn clique_neighborhood(&self, cid: CliqueId) -> Vec<Node> {
 
-        // which cliques are affected, when the edges in the clique "cid" are shuffled?
-        // therefore count how many vertices they have in common with cid
-        let mut affected_cids = vec![cid];
-        //let mut neigh_cliq_count = vec![0; self.cliques.len()];
-        let mut neigh_cliqs = std::collections::HashSet::new();
-        for &v in &self.cliques[cid as usize] {
-            for &vcid in &self.which_cliques[v as usize] {
-                if vcid != cid {
-                    if neigh_cliqs.contains(&vcid) {
-                        affected_cids.push(vcid);
-                    }
-                    neigh_cliqs.insert(vcid);
+        let mut affected_vertices = self.cliques[cid].clone();
+        for &a in &self.cliques[cid as usize] {
+            for &b in &self.cliques[cid as usize] {
+                if a > b {
+                    affected_vertices.extend_from_slice(&self.edge_neighborhood[edge_id(a, b)]);
                 }
             }
         }
-
-        affected_cids.sort_unstable();
-        affected_cids.dedup();
-        let mut affected_vertices = Vec::new();
-        for acid in affected_cids {
-            affected_vertices.extend_from_slice(&self.cliques[acid as usize]);
-        }
         affected_vertices.sort_unstable();
         affected_vertices.dedup();
-
-        return self.graph.subgraph(&affected_vertices)
+        return affected_vertices;
     }
 }
 
@@ -284,6 +342,29 @@ mod tests {
     #[test]
     fn neighborhood() {
         let s = State::new(examples::gengraph());
+        assert_eq!(s.edge_neighborhood.len(), 7 * (7-1) / 2);
+        assert_eq!(s.edge_neighborhood[edge_id(1,0)], vec![2]);
+        assert_eq!(s.edge_neighborhood[edge_id(2,0)],vec![1, 5,6]);
+        assert_eq!(s.edge_neighborhood[edge_id(2,1)], vec![0,3]);
+        assert_eq!(s.edge_neighborhood[edge_id(3,0)], vec![]); // does not exist
+        assert_eq!(s.edge_neighborhood[edge_id(3,1)], vec![2]);
+        assert_eq!(s.edge_neighborhood[edge_id(3,2)], vec![1]);
+        assert_eq!(s.edge_neighborhood[edge_id(4,0)], vec![]); // 4 is separated
+        assert_eq!(s.edge_neighborhood[edge_id(4,1)], vec![]); // 4 is separated
+        assert_eq!(s.edge_neighborhood[edge_id(4,2)], vec![]); // 4 is separated
+        assert_eq!(s.edge_neighborhood[edge_id(4,3)], vec![]); // 4 is separated
+        assert_eq!(s.edge_neighborhood[edge_id(5,0)], vec![2,6]); // 
+        assert_eq!(s.edge_neighborhood[edge_id(5,1)], vec![]); // does not exist
+        assert_eq!(s.edge_neighborhood[edge_id(5,2)], vec![0,6]);
+        assert_eq!(s.edge_neighborhood[edge_id(5,3)], vec![]); // does not exist
+        assert_eq!(s.edge_neighborhood[edge_id(5,4)], vec![]); // does not exist
+        assert_eq!(s.edge_neighborhood[edge_id(6,0)], vec![2,5]);
+        assert_eq!(s.edge_neighborhood[edge_id(6,1)], vec![]); // does not exist
+        assert_eq!(s.edge_neighborhood[edge_id(6,2)], vec![0,5]);
+        assert_eq!(s.edge_neighborhood[edge_id(6,3)], vec![]); // does not exist
+        assert_eq!(s.edge_neighborhood[edge_id(6,4)], vec![]); // 4 i separated
+        assert_eq!(s.edge_neighborhood[edge_id(6,5)], vec![0,2]);
+        dbg!(&s);
         dbg!(&s.cliques[0]);
         dbg!(s.clique_neighborhood(0));
         dbg!(&s.cliques[1]);
@@ -402,7 +483,7 @@ impl<State: MarcovState+Clone, R, A> MCMCSampler<State, R, A>
             }
         }
     }
-    pub fn next(&mut self) -> State{
+    pub fn next(&mut self) -> &State{
         for _ in 0..self.sample_distance {
             let a = A::gen(&self.state, &mut self.rng);
             //println!("{:?}", &a);
@@ -416,7 +497,7 @@ impl<State: MarcovState+Clone, R, A> MCMCSampler<State, R, A>
                 self.state.apply(&a);
             }
         }
-        return self.state.clone();
+        return &self.state;
     }
     pub fn acceptance_ratio(&self) -> f64 {
         return self.accepted as f64 / self.sampled as f64;

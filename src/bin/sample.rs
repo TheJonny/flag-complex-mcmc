@@ -48,8 +48,9 @@ fn main() {
     for i in 0..args.number_of_samples {
         let s = sampler.next();
         io::save_flag_file(&format!("{}-{:03}-{:03}", args.input, args.seed, i), &s.graph);
-        dbg!(sampler.acceptance_ratio());
         println!("flag count: {:?}", s.flag_count);
+        drop(s);
+        dbg!(sampler.acceptance_ratio());
     }
 }
 
