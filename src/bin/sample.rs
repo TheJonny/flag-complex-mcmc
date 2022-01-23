@@ -1,6 +1,5 @@
 // Authors: "Jonathan Krebs and Florian Unger"
 use directed_scm::*;
-use std::marker::PhantomData;
 use rand::prelude::*;
 use clap::Parser;
 
@@ -43,7 +42,7 @@ fn main() {
     println!("we have the following number of maximal cliques {:?}", &st.cliques.iter().map(|c| c.len()).sum::<usize>());
     //let mut sampler = MCMCSampler {state: st, burn_in: 2000, sample_distance: 2000, accepted: 0, sampled: 0, rng: rand::thread_rng(), _a: PhantomData::<Shuffling>::default() };
     let rng = rand::rngs::StdRng::seed_from_u64(args.seed);
-    let mut sampler = MCMCSampler {state: st, burn_in: args.burn_in, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng, _a: PhantomData::<Shuffling>::default() };
+    let mut sampler = MCMCSampler {state: st, burn_in: args.burn_in, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
     sampler.burn_in();
     for i in 0..args.number_of_samples {
         let s = sampler.next();

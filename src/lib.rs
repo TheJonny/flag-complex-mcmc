@@ -1,6 +1,3 @@
-use std::marker::PhantomData;
-
-
 use std::cmp::{max, min};
 use rand;
 use rand::prelude::*;
@@ -36,9 +33,6 @@ pub struct State {
     pub flag_count_max: Vec<usize>,
 }
 
-#[derive(Clone, Debug)]
-pub struct Shuffling(CliqueId, Vec<usize>);
-
 impl State {
     pub fn new(graph: DirectedGraph) -> Self {
 
@@ -63,62 +57,6 @@ impl State {
 
         State { graph, cliques, which_cliques, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
     }
-    pub fn sample_shuffling<R: Rng>(&self, rng: &mut R) -> Shuffling {
-        let cid = rng.gen_range(0..self.cliques.len() as CliqueId);
-        let n = self.cliques[cid].len();
-        let mut perm = (0..n).collect::<Vec<usize>>();
-        perm.shuffle(rng);
-        Shuffling(cid, perm)
-    }
-    /// new.edge(s[i], s[j]) <-> old.edge(i,j)
-    pub fn apply_shuffling(&mut self, s: &Shuffling) {
-        if true { // toggle between new and old algorithm
-            self.apply_transition(&Transition::new_clique_shuffling(self, s.0, &s.1));
-            return;
-        }
-        let Shuffling(cid, perm) = s;
-        let cid = *cid;
-        let cn = self.clique_neighborhood(cid);
-        let pre = self.graph.subgraph(&cn).flagser_count();
-        //println!("{:?}", &self.clique_neighborhood(cid));
-        //dbg!(cn.nnodes);
-        for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
-            assert!(*s >= *p);
-            *s -= *p;
-        }
-
-        let cl = &mut self.cliques[cid as usize];
-
-        // set new edge directions:
-        // create a new subgraph adjacency matrix as hashmap and then apply it to self.
-        {
-            use std::collections::HashMap;
-            let mut adjmat_new = HashMap::<(Node, Node),  bool>::new();
-
-            // prepare new adjacency matrix...
-            for i in 0 .. cl.len() {
-                for j in 0 .. cl.len() {
-                    adjmat_new.insert((cl[perm[i]], cl[perm[j]]), self.graph.edge(cl[i], cl[j]));
-                }
-            }
-            // ..apply it
-            for &from in cl.iter() {
-                for &to in cl.iter() {
-                    *self.graph.edge_mut(from, to) = adjmat_new[&(from, to)];
-                }
-            }
-        }
-
-        // TODO: vertices der neighborhood müssen nicht neu gesucht werden, kann man speichern
-        let post = self.graph.subgraph(&cn).flagser_count();
-        if post.len() > self.flag_count.len() {
-            self.flag_count.resize(post.len(), 0);
-        }
-        for (p,s) in post.iter().zip(self.flag_count.iter_mut()) {
-            *s += *p;
-        }
-
-    }
 
     /// applies transition, returns the change in simplex counts
     pub fn apply_transition(&mut self, t: &Transition) -> (Vec<usize>, Vec<usize>) {
@@ -140,6 +78,29 @@ impl State {
         }
 
         return (pre, post);
+    }
+
+    pub fn revert_transition(&mut self, t: &Transition, &(ref pre, ref post): &(Vec<usize>, Vec<usize>)) {
+        for &([a,b],add) in &t.change_edges {
+            *self.graph.edge_mut(a, b) = !add;
+        }
+
+        for (p,s) in post.iter().zip(self.flag_count.iter_mut()) {
+            assert!(*s >= *p);
+            *s -= *p;
+        }
+
+        if pre.len() > self.flag_count.len() {
+            self.flag_count.resize(pre.len(), 0);
+        }
+        for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
+            *s += *p;
+        }
+    }
+
+    fn valid(&self) -> bool {
+        return all_le(&self.flag_count_min, &self.flag_count, &0)
+            && all_le(&self.flag_count, &self.flag_count_max, &0);
     }
 
     /// returns the subgraph affected by shuffling vertices/edges in clique cid.
@@ -182,13 +143,6 @@ fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
         }
     }
     return true;
-}
-
-impl MarcovState for State {
-    fn valid(&self) -> bool {
-        return all_le(&self.flag_count_min, &self.flag_count, &0)
-            && all_le(&self.flag_count, &self.flag_count_max, &0);
-    }
 }
 
 #[cfg(test)]
@@ -307,74 +261,36 @@ pub mod examples {
     }
 }
 
-pub trait Action<State : ?Sized> {
-    //type State;
-    fn reverse(&self) -> Self;
-    fn apply(&self, state: &mut State);
-    fn gen<R: Rng>(state: &State, rng: &mut R) -> Self;
-}
-
-pub trait MarcovState {
-    fn valid(&self) -> bool;
-    fn apply<A: Action<Self>>(&mut self, action: &A) {
-        action.apply(self);
-    }
-}
-
-impl Action<State> for Shuffling {
-    fn reverse(&self) -> Self{
-        let Shuffling(cid,perm) = self;
-        let mut inverse = vec![0; perm.len()];
-        for i in 0 .. perm.len() {
-            inverse[perm[i]] = i;
-        }
-        return Shuffling(*cid, inverse);
-    }
-
-    fn apply(&self, state: &mut State) {
-         state.apply_shuffling(self);
-    }
-    fn gen<R: Rng>(state: &State, rng: &mut R) -> Shuffling {
-        state.sample_shuffling(rng)
-    }
-}
-
-pub struct MCMCSampler<S: MarcovState, R: Rng, A: Action<S>> {
-    pub state: S,
+pub struct MCMCSampler<R: Rng> {
+    pub state: State,
     pub burn_in: usize,
     pub sample_distance: usize,
     pub sampled: usize,
     pub accepted: usize,
     pub rng: R,
-    pub _a: PhantomData<A>
 }
 
-impl<State: MarcovState+Clone, R, A> MCMCSampler<State, R, A>
-    where A: Action<State> + std::fmt::Debug, R: Rng
-{
+impl<R: Rng> MCMCSampler<R> {
     pub fn burn_in(&mut self) {
         while self.burn_in > 0 {
             self.burn_in -= 1;
-            let a = A::gen(&self.state, &mut self.rng);
-            self.state.apply(&a);
+            let t = Transition::random_clique_shuffling(&self.state, &mut self.rng);
+            let counters = self.state.apply_transition(&t);
             if ! self.state.valid() {
-                let a = a.reverse();
-                self.state.apply(&a);
+                self.state.revert_transition(&t, &counters);
             }
         }
     }
     pub fn next(&mut self) -> &State{
         for _ in 0..self.sample_distance {
-            let a = A::gen(&self.state, &mut self.rng);
-            //println!("{:?}", &a);
-            self.state.apply(&a);
+            let t = Transition::random_clique_shuffling(&self.state, &mut self.rng);
+            let counters = self.state.apply_transition(&t);
             self.sampled += 1;
             if self.state.valid() {
                 self.accepted += 1;
             }
             else {
-                let a = a.reverse();
-                self.state.apply(&a);
+                self.state.revert_transition(&t, &counters);
             }
         }
         return &self.state;
@@ -391,6 +307,7 @@ pub struct Transition {
 }
 
 impl Transition {
+    /// new.edge(s[i], s[j]) <-> old.edge(i,j)
     pub fn new_clique_shuffling(state: &State, cid: CliqueId, perm: &[usize]) -> Self{
         let cl = &state.cliques[cid as usize];
 
@@ -409,5 +326,12 @@ impl Transition {
             }
         }
         Transition {change_edges}
+    }
+    pub fn random_clique_shuffling<R: Rng>(state: &State, rng: &mut R) -> Self {
+        let cid = rng.gen_range(0..state.cliques.len() as CliqueId);
+        let n = state.cliques[cid].len();
+        let mut perm = (0..n).collect::<Vec<usize>>();
+        perm.shuffle(rng);
+        return Transition::new_clique_shuffling(state, cid, &perm);
     }
 }
