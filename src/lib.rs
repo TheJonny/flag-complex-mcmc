@@ -8,7 +8,7 @@ pub mod io;
 
 mod util;
 
-mod graph;
+pub mod graph;
 use graph::*;
 
 mod flagser;

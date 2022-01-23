@@ -93,6 +93,53 @@ impl DirectedGraph {
             x.push(v);
         }
     }
+    pub fn compute_maximal_cliques2(&self) -> Vec<Vec<Node>> {
+        // TODO: Kommentierung
+        // undirected flagser statt eigenbau?
+        let mut r = vec![];
+        let x = vec![];
+        let p = (0..(self.nnodes as Node)).collect();
+        let mut res = vec![];
+        let mut rng = rand::thread_rng();
+        self.bron_kerbosch_rand(&mut r, p, x, &mut res, &mut rng);
+        return res;
+    }
+    /// recursion for compute_maximal_cliques
+    fn bron_kerbosch_rand<R: rand::Rng>(&self, r: &mut Vec<Node>, p: Vec<Node>, mut x: Vec<Node>, res: &mut Vec<Vec<Node>>, rng: &mut R) {
+        // from wikipedia: https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm
+        // algorithm BronKerbosch2(R, P, X) is
+        // if P and X are both empty then
+        //     report R as a maximal clique
+        // choose a pivot vertex u in P ⋃ X
+        // for each vertex v in P \ N(u) do
+        //     BronKerbosch2(R ⋃ {v}, P ⋂ N(v), X ⋂ N(v))
+        //     P := P \ {v}
+        //     X := X ⋃ {v}
+        
+        if p.is_empty() && x.is_empty() {
+            res.push(r.clone());
+            return;
+        }
+        let pivot_i = rng.gen_range(0..p.len() + x.len());
+        let pivot = if pivot_i < p.len() { p[pivot_i] } else {x[pivot_i-p.len()]};
+
+        for (i,&v) in (0..).zip(&p) {
+            if self.edge(v, pivot) || self.edge(pivot, v) {
+                continue;
+            }
+            let newp = p[i..].iter().cloned().filter(|&u| self.edge(u,v) || self.edge(v,u)).collect();
+            let newx = x.iter().cloned().filter(|&u| self.edge(u,v) || self.edge(v,u)).collect();
+            let addv = !r.contains(&v);
+            if addv {
+                r.push(v);
+            }
+            self.bron_kerbosch_rand(r, newp, newx, res, rng);
+            if addv {
+                r.pop();
+            }
+            x.push(v);
+        }
+    }
 
     pub fn edges(&self) -> Vec<[Node; 2]> {
         let mut edges = vec![];
