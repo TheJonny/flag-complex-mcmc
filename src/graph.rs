@@ -1,6 +1,8 @@
 pub type Node = u32;
 pub type CliqueId = usize;
 
+pub type Edge = [Node; 2];
+
 use rayon::prelude::*;
 
 #[derive(Clone)]

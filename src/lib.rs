@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 
+use std::cmp::{max, min};
 use rand;
 use rand::prelude::*;
 
@@ -69,7 +70,12 @@ impl State {
         perm.shuffle(rng);
         Shuffling(cid, perm)
     }
+    /// new.edge(s[i], s[j]) <-> old.edge(i,j)
     pub fn apply_shuffling(&mut self, s: &Shuffling) {
+        if true { // toggle between new and old algorithm
+            self.apply_transition(&Transition::new_clique_shuffling(self, s.0, &s.1));
+            return;
+        }
         let Shuffling(cid, perm) = s;
         let cid = *cid;
         let cn = self.clique_neighborhood(cid);
@@ -103,7 +109,7 @@ impl State {
             }
         }
 
-        // TODO: vertices der neighbourhood müssen nicht neu gesucht werden, kann man speichern
+        // TODO: vertices der neighborhood müssen nicht neu gesucht werden, kann man speichern
         let post = self.graph.subgraph(&cn).flagser_count();
         if post.len() > self.flag_count.len() {
             self.flag_count.resize(post.len(), 0);
@@ -112,6 +118,28 @@ impl State {
             *s += *p;
         }
 
+    }
+
+    /// applies transition, returns the change in simplex counts
+    pub fn apply_transition(&mut self, t: &Transition) -> (Vec<usize>, Vec<usize>) {
+        let nei = self.edgeset_neighborhood(&t.change_edges.iter().map(|&([a,b], _)| [max(a,b), min(a,b)]).collect::<Vec<Edge>>());
+        let pre = DirectedGraph::subgraph(&self.graph, &nei).flagser_count();
+        for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
+            assert!(*s >= *p);
+            *s -= *p;
+        }
+        for &([a,b],add) in &t.change_edges {
+            *self.graph.edge_mut(a, b) = add;
+        }
+        let post = self.graph.subgraph(&nei).flagser_count();
+        if post.len() > self.flag_count.len() {
+            self.flag_count.resize(post.len(), 0);
+        }
+        for (p,s) in post.iter().zip(self.flag_count.iter_mut()) {
+            *s += *p;
+        }
+
+        return (pre, post);
     }
 
     /// returns the subgraph affected by shuffling vertices/edges in clique cid.
@@ -125,6 +153,18 @@ impl State {
                     affected_vertices.extend_from_slice(&self.edge_neighborhood[edge_id(a, b)]);
                 }
             }
+        }
+        affected_vertices.sort_unstable();
+        affected_vertices.dedup();
+        return affected_vertices;
+    }
+
+    pub fn edgeset_neighborhood(&self, edges: &[Edge]) -> Vec<Node>{
+        let mut affected_vertices = vec![];
+        for &[a,b] in edges {
+            affected_vertices.extend_from_slice(&self.edge_neighborhood[edge_id(a, b)]);
+            affected_vertices.push(a);
+            affected_vertices.push(b);
         }
         affected_vertices.sort_unstable();
         affected_vertices.dedup();
@@ -341,5 +381,33 @@ impl<State: MarcovState+Clone, R, A> MCMCSampler<State, R, A>
     }
     pub fn acceptance_ratio(&self) -> f64 {
         return self.accepted as f64 / self.sampled as f64;
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Transition {
+    /// true: add this edge; false: remove this edge
+    pub change_edges: Vec<(Edge, bool)>,
+}
+
+impl Transition {
+    pub fn new_clique_shuffling(state: &State, cid: CliqueId, perm: &[usize]) -> Self{
+        let cl = &state.cliques[cid as usize];
+
+        // set new edge directions:
+        // create a new subgraph adjacency matrix as hashmap and then apply it to self.
+        let mut change_edges = vec![];
+
+        // prepare new adjacency matrix...
+        for i in 0 .. cl.len() {
+            for j in 0 .. cl.len() {
+                let pre = state.graph.edge(cl[perm[i]], cl[perm[j]]);
+                let post = state.graph.edge(cl[i], cl[j]);
+                if pre != post {
+                    change_edges.push(([cl[perm[i]], cl[perm[j]]], post));
+                }
+            }
+        }
+        Transition {change_edges}
     }
 }
