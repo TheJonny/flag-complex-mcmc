@@ -105,7 +105,7 @@ impl DirectedGraph {
         return res;
     }
     /// recursion for compute_maximal_cliques
-    fn bron_kerbosch_rand<R: rand::Rng>(&self, r: &mut Vec<Node>, p: Vec<Node>, mut x: Vec<Node>, res: &mut Vec<Vec<Node>>, rng: &mut R) {
+    fn bron_kerbosch_rand<R: rand::Rng>(&self, r: &mut Vec<Node>, mut p: Vec<Node>, mut x: Vec<Node>, res: &mut Vec<Vec<Node>>, rng: &mut R) {
         // from wikipedia: https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm
         // algorithm BronKerbosch2(R, P, X) is
         // if P and X are both empty then
@@ -123,8 +123,12 @@ impl DirectedGraph {
         let pivot_i = rng.gen_range(0..p.len() + x.len());
         let pivot = if pivot_i < p.len() { p[pivot_i] } else {x[pivot_i-p.len()]};
 
-        for (i,&v) in (0..).zip(&p) {
+        for i in 0..p.len() {
+            let v = p[i];
             if self.edge(v, pivot) || self.edge(pivot, v) {
+                // skipping will exclude v=p[i] from p[i..].
+                // so add it at the back to keep it.
+                p.push(v);
                 continue;
             }
             let newp = p[i..].iter().cloned().filter(|&u| self.edge(u,v) || self.edge(v,u)).collect();
