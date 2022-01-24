@@ -11,30 +11,19 @@ use graph::*;
 
 mod flagser;
 
-/// undirected edge pair to index in triangular adjacency matrix
-/// ```
-/// use directed_scm::*;
-/// assert_eq!(edge_id(1, 0), 0);
-/// assert_eq!(edge_id(2, 0), 1);
-/// assert_eq!(edge_id(2, 1), 2);
-/// assert_eq!(edge_id(3, 0), 3);
-/// assert_eq!(edge_id(3, 1), 4);
-/// assert_eq!(edge_id(3, 2), 5);
-/// ```
-
 #[derive(Clone, Debug)]
 pub struct State {
     pub cliques: Vec<Vec<Node>>,
     pub which_cliques: Vec<Vec<CliqueId>>,
     pub edge_neighborhood: Vec<Vec<Node>>,
-    pub graph: DirectedGraph,
+    pub graph: BoolMatrixGraph,
     pub flag_count: Vec<usize>,
     pub flag_count_min: Vec<usize>,
     pub flag_count_max: Vec<usize>,
 }
 
 impl State {
-    pub fn new(graph: DirectedGraph) -> Self {
+    pub fn new(graph: BoolMatrixGraph) -> Self {
 
         println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
@@ -61,7 +50,7 @@ impl State {
     /// applies transition, returns the change in simplex counts
     pub fn apply_transition(&mut self, t: &Transition) -> (Vec<usize>, Vec<usize>) {
         let nei = self.edgeset_neighborhood(&t.change_edges.iter().map(|&([a,b], _)| [max(a,b), min(a,b)]).collect::<Vec<Edge>>());
-        let pre = DirectedGraph::subgraph(&self.graph, &nei).flagser_count();
+        let pre = BoolMatrixGraph::subgraph(&self.graph, &nei).flagser_count();
         for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
             assert!(*s >= *p);
             *s -= *p;
@@ -69,7 +58,7 @@ impl State {
         for &([a,b],add) in &t.change_edges {
             *self.graph.edge_mut(a, b) = add;
         }
-        let post = self.graph.subgraph(&nei).flagser_count();
+        let post = BoolMatrixGraph::subgraph(&self.graph, &nei).flagser_count();
         if post.len() > self.flag_count.len() {
             self.flag_count.resize(post.len(), 0);
         }
@@ -222,9 +211,9 @@ mod tests {
 }
 
 pub mod examples {
-    use crate::DirectedGraph;
-    pub fn gengraph() -> DirectedGraph {
-        let mut g = DirectedGraph::new_disconnected(7);
+    use crate::graph::*;
+    pub fn gengraph() -> BoolMatrixGraph {
+        let mut g = BoolMatrixGraph::new_disconnected(7);
 
         // 0,1
         g.add_edge(0,1);
@@ -251,9 +240,9 @@ pub mod examples {
         return g
     }
 
-    pub fn gengraph2() -> DirectedGraph {
+    pub fn gengraph2() -> BoolMatrixGraph {
         // simplest of all simplices of dimension 2
-        let mut g = DirectedGraph::new_disconnected(3);
+        let mut g = BoolMatrixGraph::new_disconnected(3);
         g.add_edge(0,1);
         g.add_edge(0,2);
         g.add_edge(1,2);

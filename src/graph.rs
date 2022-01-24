@@ -5,32 +5,43 @@ pub type Edge = [Node; 2];
 
 use rayon::prelude::*;
 
+pub trait DirectedGraph {
+    fn edge(&self, from: Node, to: Node) -> bool;
+    fn add_edge(&mut self, from: Node, to: Node);
+    fn nnodes(&self) -> usize;
+    type NodeIterator: Iterator<Item=Node>;
+    fn iter_nodes(&self) -> Self::NodeIterator;
+}
+
+pub trait DirectedGraphNew: DirectedGraph + Sized {
+    fn new_disconnected(nnodes: usize) -> Self;
+    fn subgraph<G: DirectedGraph>(ori: &G, vertices: &[Node]) -> Self {
+        // macht komische dinge wenn Vertices in dem Slice doppelt vorkommen
+        // FIXME?
+        let mut sub = Self::new_disconnected(vertices.len());
+        for (new_from, &ori_from) in (0..).zip(vertices.iter()) {
+            for (new_to, &ori_to) in (0..).zip(vertices.iter()) {
+                if ori.edge(ori_from, ori_to) {
+                    sub.add_edge(new_from, new_to);
+                }
+            }
+        }
+        return sub;
+    }
+}
+
 #[derive(Clone)]
-pub struct DirectedGraph {
+pub struct BoolMatrixGraph {
     pub adjmat: Vec<bool>,
     pub nnodes: usize,
 }
-impl std::fmt::Debug for DirectedGraph{
+impl std::fmt::Debug for BoolMatrixGraph{
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         return write!(f, "A graph with {} nodes and the following edges: {:?}", self.nnodes, self.edges());
     }
 }
 
-impl DirectedGraph {
-    pub fn new_disconnected(nnodes: usize) -> Self{
-        let adjsize = nnodes.checked_mul(nnodes).expect("adjacency matrix size overflows");
-        let adjmat = vec![false; adjsize];
-        return DirectedGraph{adjmat, nnodes};
-    }
-    pub fn edge(&self, from: Node, to: Node) -> bool{
-        if from as usize >= self.nnodes {
-            panic!("from out of bounds");
-        }
-        if to as usize >= self.nnodes {
-            panic!("to out of bounds");
-        }
-        return self.adjmat[(from as usize) * self.nnodes + (to as usize)];
-    }
+impl BoolMatrixGraph {
     pub fn edge_mut (&mut self, from: Node, to: Node) -> &mut bool{
         if from as usize >= self.nnodes {
             panic!("from out of bounds");
@@ -40,29 +51,47 @@ impl DirectedGraph {
         }
         return &mut self.adjmat[(from as usize) * self.nnodes + (to as usize)];
     }
+}
+impl DirectedGraphNew for BoolMatrixGraph {
+    fn new_disconnected(nnodes: usize) -> Self{
+        let adjsize = nnodes.checked_mul(nnodes).expect("adjacency matrix size overflows");
+        let adjmat = vec![false; adjsize];
+        return BoolMatrixGraph{adjmat, nnodes};
+    }
+}
 
-    pub fn add_edge(&mut self, from: Node, to: Node) {
+impl DirectedGraph for BoolMatrixGraph {
+    fn nnodes(&self) -> usize {
+        return self.nnodes;
+    }
+    fn edge(&self, from: Node, to: Node) -> bool{
+        if from as usize >= self.nnodes {
+            panic!("from out of bounds");
+        }
+        if to as usize >= self.nnodes {
+            panic!("to out of bounds");
+        }
+        return self.adjmat[(from as usize) * self.nnodes + (to as usize)];
+    }
+
+    fn add_edge(&mut self, from: Node, to: Node) {
         *self.edge_mut(from, to) = true;
     }
-
-    pub fn subgraph(&self, vertices: &[Node]) -> DirectedGraph {
-        // macht komische dinge wenn Vertices in dem Slice doppelt vorkommen
-        // FIXME?
-        let mut sub = DirectedGraph::new_disconnected(vertices.len());
-        for (new_from, &ori_from) in (0..).zip(vertices.iter()) {
-            for (new_to, &ori_to) in (0..).zip(vertices.iter()) {
-                *sub.edge_mut(new_from, new_to) = self.edge(ori_from, ori_to);
-            }
-        }
-        return sub;
+    type NodeIterator = std::ops::Range<Node>;
+    fn iter_nodes(&self) -> Self::NodeIterator {
+        (0.. (self.nnodes as Node)).into_iter()
     }
+}
 
-    pub fn compute_maximal_cliques(&self) -> Vec<Vec<Node>> {
+
+
+pub trait DirectedGraphExt: DirectedGraph {
+    fn compute_maximal_cliques(&self) -> Vec<Vec<Node>> {
         // TODO: Kommentierung
         // undirected flagser statt eigenbau?
         let mut r = vec![];
         let x = vec![];
-        let p = (0..(self.nnodes as Node)).collect();
+        let p = (0..(self.nnodes() as Node)).collect();
         let mut res = vec![];
         self.bron_kerbosch(&mut r, p, x, &mut res);
         return res;
@@ -95,12 +124,12 @@ impl DirectedGraph {
             x.push(v);
         }
     }
-    pub fn compute_maximal_cliques2(&self) -> Vec<Vec<Node>> {
+    fn compute_maximal_cliques2(&self) -> Vec<Vec<Node>> {
         // TODO: Kommentierung
         // undirected flagser statt eigenbau?
         let mut r = vec![];
         let x = vec![];
-        let p = (0..(self.nnodes as Node)).collect();
+        let p = self.iter_nodes().collect();
         let mut res = vec![];
         let mut rng = rand::thread_rng();
         self.bron_kerbosch_rand(&mut r, p, x, &mut res, &mut rng);
@@ -147,10 +176,10 @@ impl DirectedGraph {
         }
     }
 
-    pub fn edges(&self) -> Vec<[Node; 2]> {
+    fn edges(&self) -> Vec<[Node; 2]> {
         let mut edges = vec![];
-        for from in 0..(self.nnodes as Node) {
-            for to in 0..(self.nnodes as Node) {
+        for from in self.iter_nodes() {
+            for to in self.iter_nodes() {
                 if self.edge(from, to) {
                     edges.push([from, to]);
                 }
@@ -159,17 +188,14 @@ impl DirectedGraph {
         return edges
     }
 
-    pub fn flagser_count(&self) -> Vec<usize> {
-        crate::flagser::count_unweighted(self.nnodes, &self.edges())
+    fn flagser_count(&self) -> Vec<usize> {
+        crate::flagser::count_unweighted(self.nnodes(), &self.edges())
     }
 
-    pub fn iter_nodes(&self) -> impl Iterator<Item=Node> {
-        (0.. (self.nnodes as Node)).into_iter()
-    }
 
     /// for every edge, this gathers the nodes that are connected to both ends.
-    pub fn compute_edge_neighborhoods(&self) -> Vec<Vec<Node>>{
-        let mut undirected_adj_lists = vec![vec![]; self.nnodes];
+    fn compute_edge_neighborhoods(&self) -> Vec<Vec<Node>>{
+        let mut undirected_adj_lists = vec![vec![]; self.nnodes()];
         let mut undirected_edges = self.edges();
         use std::cmp::{min, max};
         for e in &mut undirected_edges {
@@ -196,7 +222,7 @@ impl DirectedGraph {
             l.shrink_to_fit();
             (edge_id(a, b), l)
         }).collect_into_vec(&mut respairs);
-        let mut res = vec![vec![]; self.nnodes * (self.nnodes-1) / 2];
+        let mut res = vec![vec![]; self.nnodes() * (self.nnodes()-1) / 2];
         for (eid, l) in respairs {
             res[eid] = l;
         }
@@ -205,6 +231,25 @@ impl DirectedGraph {
     }
 }
 
+impl<G: DirectedGraph> DirectedGraphExt for G {}
+
+
+pub fn degeneracy_order(g: &BoolMatrixGraph) -> Vec<Node> {
+
+    todo!()
+}
+
+
+/// undirected edge pair to index in triangular adjacency matrix
+/// ```
+/// use directed_scm::graph::*;
+/// assert_eq!(edge_id(1, 0), 0);
+/// assert_eq!(edge_id(2, 0), 1);
+/// assert_eq!(edge_id(2, 1), 2);
+/// assert_eq!(edge_id(3, 0), 3);
+/// assert_eq!(edge_id(3, 1), 4);
+/// assert_eq!(edge_id(3, 2), 5);
+/// ```
 pub fn edge_id(a: Node, b: Node) -> usize{
     assert!(a > b);
     return (a as usize) * ((a as usize)-1) / 2 + (b as usize);
