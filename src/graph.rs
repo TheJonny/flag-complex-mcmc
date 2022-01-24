@@ -8,9 +8,41 @@ use rayon::prelude::*;
 pub trait DirectedGraph {
     fn edge(&self, from: Node, to: Node) -> bool;
     fn add_edge(&mut self, from: Node, to: Node);
+    fn remove_edge(&mut self, from: Node, to: Node);
     fn nnodes(&self) -> usize;
     type NodeIterator: Iterator<Item=Node>;
     fn iter_nodes(&self) -> Self::NodeIterator;
+
+    fn edges(&self) -> Vec<[Node; 2]> {
+        let mut edges = vec![];
+        for from in self.iter_nodes() {
+            for to in self.iter_nodes() {
+                if self.edge(from, to) {
+                    edges.push([from, to]);
+                }
+            }
+        }
+        return edges
+    }
+    fn set_edge(&mut self, from: Node, to: Node, create: bool) {
+        if create {
+            self.add_edge(from, to);
+        }
+        else {
+            self.remove_edge(from, to);
+        }
+    }
+
+    fn edges_from(&self, from: Node) -> Vec<Node>{
+        let mut res = vec![];
+        for to in self.iter_nodes() {
+            if self.edge(from, to) {
+                res.push(to);
+            }
+        }
+        return res;
+    }
+
 }
 
 pub trait DirectedGraphNew: DirectedGraph + Sized {
@@ -77,9 +109,15 @@ impl DirectedGraph for BoolMatrixGraph {
     fn add_edge(&mut self, from: Node, to: Node) {
         *self.edge_mut(from, to) = true;
     }
+    fn remove_edge(&mut self, from: Node, to: Node) {
+        *self.edge_mut(from, to) = false;
+    }
     type NodeIterator = std::ops::Range<Node>;
     fn iter_nodes(&self) -> Self::NodeIterator {
         (0.. (self.nnodes as Node)).into_iter()
+    }
+    fn set_edge(&mut self, from: Node, to: Node, create: bool) {
+        *self.edge_mut(from, to) = create;
     }
 }
 
@@ -176,18 +214,6 @@ pub trait DirectedGraphExt: DirectedGraph {
         }
     }
 
-    fn edges(&self) -> Vec<[Node; 2]> {
-        let mut edges = vec![];
-        for from in self.iter_nodes() {
-            for to in self.iter_nodes() {
-                if self.edge(from, to) {
-                    edges.push([from, to]);
-                }
-            }
-        }
-        return edges
-    }
-
     fn flagser_count(&self) -> Vec<usize> {
         crate::flagser::count_unweighted(self.nnodes(), &self.edges())
     }
@@ -254,4 +280,105 @@ pub fn edge_id(a: Node, b: Node) -> usize{
     assert!(a > b);
     return (a as usize) * ((a as usize)-1) / 2 + (b as usize);
     
+}
+
+type Chunk = u64;
+const CHUNK_SIZE: usize = Chunk::BITS as usize;
+
+#[derive(Debug, Clone)]
+pub struct CompactMatrixGraph {
+    nnodes: usize,
+    row_len: usize,
+    out_matrix: Vec<Chunk>,
+    //out_degrees: Vec<usize>,
+}
+
+impl DirectedGraphNew for CompactMatrixGraph {
+    fn new_disconnected(nnodes: usize) -> Self {
+        // nnodes / Chunk::BITS, rounded up.
+        let row_len = (nnodes + Chunk::BITS as usize - 1) / (Chunk::BITS as usize);
+
+        let matsize = row_len.checked_mul(nnodes).expect("size of adjacency matrix overflows");
+        let out_matrix = vec![0; matsize];
+        //let out_degrees = vec![0; nnodes];
+        CompactMatrixGraph { out_matrix, row_len, nnodes}
+    }
+}
+
+impl DirectedGraph for CompactMatrixGraph {
+    fn nnodes(&self) -> usize {
+        return self.nnodes;
+    }
+    fn edge(&self, from: Node, to: Node) -> bool {
+        if from as usize >= self.nnodes {
+            panic!("from out of bounds: {} >= {}", from, self.nnodes);
+        }
+        if to as usize >= self.nnodes {
+            panic!("to out of bounds: {} >= {}", to, self.nnodes);
+        }
+        let toh = to as usize / CHUNK_SIZE;
+        let tol = to as usize % CHUNK_SIZE;
+        let row = from as usize;
+        return self.out_matrix[row * self.row_len + toh] & (1<<tol) != 0;
+    }
+    type NodeIterator = std::ops::Range<Node>;
+    fn iter_nodes(&self) -> Self::NodeIterator {
+        (0.. (self.nnodes as Node)).into_iter()
+    }
+    fn add_edge(&mut self, from: Node, to: Node) {
+        let toh = to as usize / CHUNK_SIZE;
+        let tol = to as usize % CHUNK_SIZE;
+        let row = from as usize;
+        //
+        //if self.out_matrix[row * self.row_len + toh] & (1<<tol) != 0 {
+            //self.out_degrees[from] += 1;
+        //}
+        self.out_matrix[row * self.row_len + toh] |= 1<<tol;
+    }
+    fn remove_edge(&mut self, from: Node, to: Node) {
+        let toh = to as usize / CHUNK_SIZE;
+        let tol = to as usize % CHUNK_SIZE;
+        let row = from as usize;
+        //
+        //if self.out_matrix[row * self.row_len + toh] & (1<<tol) != 0 {
+            //self.out_degrees[from] += 1;
+        //}
+        self.out_matrix[row * self.row_len + toh] &= !(1<<tol);
+    }
+
+    fn edges(&self) -> Vec<[Node; 2]> {
+        let mut result = vec![];
+        for from in 0 .. self.nnodes {
+            for toh in 0 .. self.row_len {
+                let mut bits = self.out_matrix[from * self.row_len + toh];
+                while bits != 0 {
+                    let b = bits.trailing_zeros();
+                    bits &= !(1<<b);
+                    let to = toh as u32 * Chunk::BITS | b;
+                    result.push([from as Node, to]);
+                }
+            }
+        }
+        result
+    }
+    /// ```
+    /// use directed_scm::graph::*;
+    /// let mut g = CompactMatrixGraph::new_disconnected(5);
+    /// g.add_edge(2, 3);
+    /// assert_eq!(g.edges_from(2), vec![3]);
+    /// ```
+    fn edges_from(&self, from: Node) -> Vec<Node> {
+        let offset = self.row_len * from as usize;
+        let mut result = vec![];
+        for toh in 0 .. self.row_len {
+            let mut bits = self.out_matrix[offset + toh];
+            while bits != 0 {
+                let b = bits.trailing_zeros();
+                bits &= !(1<<b);
+                let to = toh as u32 * Chunk::BITS | b;
+                result.push(to);
+            }
+        }
+        result
+    }
 }

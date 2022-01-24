@@ -11,23 +11,28 @@ use graph::*;
 
 mod flagser;
 
+//pub mod flag_complex;
+
+type Graph = CompactMatrixGraph;
+//type Graph = BoolMatrixGraph;
+
 #[derive(Clone, Debug)]
 pub struct State {
     pub cliques: Vec<Vec<Node>>,
     pub which_cliques: Vec<Vec<CliqueId>>,
     pub edge_neighborhood: Vec<Vec<Node>>,
-    pub graph: BoolMatrixGraph,
+    pub graph: Graph,
     pub flag_count: Vec<usize>,
     pub flag_count_min: Vec<usize>,
     pub flag_count_max: Vec<usize>,
 }
 
 impl State {
-    pub fn new(graph: BoolMatrixGraph) -> Self {
+    pub fn new(graph: Graph) -> Self {
 
         println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
-        let mut which_cliques = vec![Vec::new(); graph.nnodes];
+        let mut which_cliques = vec![Vec::new(); graph.nnodes()];
         for (c,cid) in cliques.iter().zip(0..) {
             for &v in c  {
                 which_cliques[v as usize].push(cid);
@@ -35,6 +40,8 @@ impl State {
         }
         println!("initial flagser");
         let flag_count = graph.flagser_count();
+        //let flag_count = flag_complex::count_cells(&graph);
+        //assert_eq!(flag_count, flag_count2);
         let bandwidth = 1.10;
         let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| (*x as f64 * bandwidth + 10.) as usize).collect();
         flag_count_max.push(2); // some higher dimensional simplices should be ok
@@ -50,15 +57,15 @@ impl State {
     /// applies transition, returns the change in simplex counts
     pub fn apply_transition(&mut self, t: &Transition) -> (Vec<usize>, Vec<usize>) {
         let nei = self.edgeset_neighborhood(&t.change_edges.iter().map(|&([a,b], _)| [max(a,b), min(a,b)]).collect::<Vec<Edge>>());
-        let pre = BoolMatrixGraph::subgraph(&self.graph, &nei).flagser_count();
+        let pre = Graph::subgraph(&self.graph, &nei).flagser_count();
         for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
             assert!(*s >= *p);
             *s -= *p;
         }
         for &([a,b],add) in &t.change_edges {
-            *self.graph.edge_mut(a, b) = add;
+            self.graph.set_edge(a, b, add);
         }
-        let post = BoolMatrixGraph::subgraph(&self.graph, &nei).flagser_count();
+        let post = Graph::subgraph(&self.graph, &nei).flagser_count();
         if post.len() > self.flag_count.len() {
             self.flag_count.resize(post.len(), 0);
         }
@@ -71,7 +78,7 @@ impl State {
 
     pub fn revert_transition(&mut self, t: &Transition, &(ref pre, ref post): &(Vec<usize>, Vec<usize>)) {
         for &([a,b],add) in &t.change_edges {
-            *self.graph.edge_mut(a, b) = !add;
+            self.graph.set_edge(a, b, !add);
         }
 
         for (p,s) in post.iter().zip(self.flag_count.iter_mut()) {
@@ -197,23 +204,16 @@ mod tests {
     #[test]
     fn flagser_count(){
         let g = examples::gengraph();
-        let mut edges = vec![];
-        for from in 0..(g.nnodes as Node) {
-            for to in 0..(g.nnodes as Node) {
-                if g.edge(from, to) {
-                    edges.push([from, to]);
-                }
-            }
-        }
-        let ncells_by_dim = flagser::count_unweighted(g.nnodes, &edges);
+        let ncells_by_dim = g.flagser_count();
         assert_eq!(&ncells_by_dim, &[7, 12, 6, 1]);
     }
 }
 
 pub mod examples {
     use crate::graph::*;
-    pub fn gengraph() -> BoolMatrixGraph {
-        let mut g = BoolMatrixGraph::new_disconnected(7);
+    use crate::Graph;
+    pub fn gengraph() -> Graph {
+        let mut g = Graph::new_disconnected(7);
 
         // 0,1
         g.add_edge(0,1);
@@ -240,9 +240,9 @@ pub mod examples {
         return g
     }
 
-    pub fn gengraph2() -> BoolMatrixGraph {
+    pub fn gengraph2() -> Graph {
         // simplest of all simplices of dimension 2
-        let mut g = BoolMatrixGraph::new_disconnected(3);
+        let mut g = Graph::new_disconnected(3);
         g.add_edge(0,1);
         g.add_edge(0,2);
         g.add_edge(1,2);
