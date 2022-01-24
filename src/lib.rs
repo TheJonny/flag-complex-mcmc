@@ -323,4 +323,51 @@ impl Transition {
         perm.shuffle(rng);
         return Transition::new_clique_shuffling(state, cid, &perm);
     }
+
+    fn edges_from_clique(state: &State, cid: usize) -> (Vec<Edge>, Vec<Edge>) {
+        // gets a clique id and returns a vector of its single and a vector of its double edges.
+        let vertices = &state.cliques[cid];
+        let mut single_edges = vec![];
+        let mut double_edges = vec![];
+        for (i,&from) in vertices.iter().enumerate() {
+            for &to in &vertices[..i]{
+                if state.graph.edge(from,to) {
+                    if state.graph.edge(to,from) {
+                        double_edges.push([from,to]);
+                    } else {
+                        single_edges.push([from,to]);
+                    }
+                } else {
+                    single_edges.push([to,from]);
+                }
+            }
+        }
+        return (single_edges, double_edges);
+    }
+
+    pub fn random_edge_swap<R: Rng>(state: &State, rng: &mut R) -> Self {
+        let cid = rng.gen_range(0..state.cliques.len() as CliqueId);
+        let (single_edges, _) = Transition::edges_from_clique(state, cid);
+        if let Some(&[from,to]) = single_edges.choose(rng) {
+            return Transition{change_edges: vec![([from,to], false), ([to,from], true)]};
+        } else {
+            return Transition{change_edges: vec![]};
+        }
+
+    }
+    
+    /* TODO: Jonathan machen lassen
+    pub fn random_double_edge_move<R: Rng>(state: &State, rng: &mut R) -> Self {
+        let [cid1,cid2] = rand::seq::index::sample(rng, state.cliques.len(), 2).into_vec()[..];
+        let (single_edges1, double_edges1) = Transition::edges_from_clique(state, cid1);
+        let (single_edges2, double_edges2) = Transition::edges_from_clique(state, cid2);
+        if let Some(&[from1,to1]) = single_edges_1.choose(rng) && let Some(&[from2,to2]) = double_edges_2.choose(rng) 
+                || let Some(&[from1,to1]) = single_edges_2.choose(rng) && let Some(&[from2,to2]) = double_edges_1.choose(rng) {
+            [from2, to2] = [[from2,to2], [to2,from2]].choose(rng);
+            return Transition{change_edges: vec![([from2,to2], false), ([to1,from1], true)]};
+        } else {
+            return Transition{change_edges: vec![]};
+        }
+    }
+    */
 }
