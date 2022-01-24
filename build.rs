@@ -6,6 +6,7 @@ fn main() {
 
     cc::Build::new()
         .file("libflagser.cpp")
+//        .flag("-march=native")
         .cpp(true)
         .compile("flagser");
 }
