@@ -217,6 +217,7 @@ impl Transition {
 
     fn edges_from_clique(state: &State, cid: usize) -> (Vec<Edge>, Vec<Edge>) {
         // gets a clique id and returns a vector of its single and a vector of its double edges.
+        // TODO: refactor, should not be part of Transition
         let vertices = &state.cliques[cid];
         let mut single_edges = vec![];
         let mut double_edges = vec![];
