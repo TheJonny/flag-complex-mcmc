@@ -1,7 +1,10 @@
 // Authors: "Jonathan Krebs and Florian Unger"
 use directed_scm::*;
-use rand::prelude::*;
+use rand::SeedableRng;
+use rand_xoshiro::Xoshiro256StarStar;
+
 use clap::Parser;
+
 
 /// MCMC sampler for flag complexes of a directed graph
 #[derive(Parser, Debug)]
@@ -31,26 +34,28 @@ struct Args{
     #[clap(long, default_value_t = 4000)]
     sample_distance: usize,
 
-    // /// outdir: location where to save sampled flags
-    // #[clap(short, long, default_value_t = "./")]
-    // outdir: String,
+    /// continue: look for a serde file and continue from there
+    #[clap(short, long, default_value = "")]
+    continue_from: String,
 }
 
 fn main() {
     let args = Args::parse();
-
-    //let g = examples::gengraph();
-    let g = io::read_flag_file(&args.input);
-    io::new_hdf_file(&args.label, args.seed).unwrap();
-
-
-    let st = State::new(g);
-    println!("we have the following number of maximal cliques {:?}", &st.cliques.iter().map(|c| c.len()).sum::<usize>());
-    //let mut sampler = MCMCSampler {state: st, burn_in: 2000, sample_distance: 2000, accepted: 0, sampled: 0, rng: rand::thread_rng(), _a: PhantomData::<Shuffling>::default() };
-    let rng = rand::rngs::StdRng::seed_from_u64(args.seed);
-    let mut sampler = MCMCSampler {state: st, burn_in: args.burn_in, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
-    sampler.burn_in();
-    for i in 0..args.number_of_samples {
+    
+    let (sample_index_start, mut sampler) = if !args.continue_from.is_empty() {
+        io::load_state(&args.label, args.seed).expect("unable to load state")
+    } else {
+        let g = io::read_flag_file(&args.input);
+        io::new_hdf_file(&args.label, args.seed).unwrap();
+        let st = State::new(g);
+        println!("we have the following number of maximal cliques {:?}", &st.cliques.iter().map(|c| c.len()).sum::<usize>());
+        let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
+        let mut sampler = MCMCSampler{state: st, burn_in: args.burn_in, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
+        sampler.burn_in();
+        (0, sampler)
+    };
+    let sample_index_end = sample_index_start + args.number_of_samples;
+    for i in sample_index_start..sample_index_end {
         let s = sampler.next();
         io::save_to_hdf(&args.label, args.seed, i, &s.graph, &s.flag_count).unwrap();
 
@@ -58,5 +63,7 @@ fn main() {
         drop(s);
         dbg!(sampler.acceptance_ratio());
     }
+
+    io::save_state(&args.label, args.seed, sample_index_end, sampler).unwrap();
 }
 

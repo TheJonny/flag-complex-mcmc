@@ -4,6 +4,7 @@ pub type CliqueId = usize;
 pub type Edge = [Node; 2];
 
 use rayon::prelude::*;
+use serde::{Serialize, Deserialize};
 
 pub trait DirectedGraph {
     fn edge(&self, from: Node, to: Node) -> bool;
@@ -285,7 +286,7 @@ pub fn edge_id(a: Node, b: Node) -> usize{
 type Chunk = u64;
 const CHUNK_SIZE: usize = Chunk::BITS as usize;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompactMatrixGraph {
     nnodes: usize,
     row_len: usize,

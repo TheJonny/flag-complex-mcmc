@@ -1,6 +1,7 @@
 use std::cmp::{max, min};
 use rand;
 use rand::prelude::*;
+use serde::{Serialize, Deserialize};
 
 pub mod io;
 
@@ -16,7 +17,7 @@ mod flagser;
 type Graph = CompactMatrixGraph;
 //type Graph = BoolMatrixGraph;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct State {
     pub cliques: Vec<Vec<Node>>,
     pub which_cliques: Vec<Vec<CliqueId>>,
@@ -141,6 +142,7 @@ fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
     return true;
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MCMCSampler<R: Rng> {
     pub state: State,
     pub burn_in: usize,
