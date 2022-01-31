@@ -7,6 +7,10 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[clap(version, about, long_about = None)]
 struct Args{
+    /// label
+    #[clap(short, long)]
+    label: String,
+
     /// flag input file location
     #[clap(short, long)]
     input: String,
@@ -35,8 +39,10 @@ struct Args{
 fn main() {
     let args = Args::parse();
 
-    let g = examples::gengraph();
+    //let g = examples::gengraph();
     let g = io::read_flag_file(&args.input);
+    io::new_hdf_file(&args.label, args.seed).unwrap();
+
 
     let st = State::new(g);
     println!("we have the following number of maximal cliques {:?}", &st.cliques.iter().map(|c| c.len()).sum::<usize>());
@@ -46,7 +52,8 @@ fn main() {
     sampler.burn_in();
     for i in 0..args.number_of_samples {
         let s = sampler.next();
-        io::save_flag_file(&format!("{}-{:03}-{:04}", args.input, args.seed, i), &s.graph);
+        io::save_to_hdf(&args.label, args.seed, i, &s.graph, &s.flag_count).unwrap();
+
         println!("flag count: {:?}", s.flag_count);
         drop(s);
         dbg!(sampler.acceptance_ratio());

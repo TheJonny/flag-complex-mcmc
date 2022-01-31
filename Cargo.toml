@@ -10,6 +10,8 @@ libc = "*"
 rand = "*"
 clap = { version = "3.0.8", features = ["derive"] }
 rayon = "*"
+hdf5 = "*"
+ndarray = "*"
 
 [build-dependencies]
 #bindgen = "*"
