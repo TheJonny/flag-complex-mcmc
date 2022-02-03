@@ -1,4 +1,4 @@
-from data_importer import simplex, clique, bbp, c_elegans, densifier
+from data_importer import simplex, clique, bbp, c_elegans, densifier, random_with_p
 from scipy.sparse import coo_matrix
 
 import numpy as np
@@ -53,13 +53,22 @@ if __name__ == '__main__':
 
     ex_09 = bbp(0)
 
+    ex_20 = random_with_p(100,0.05)     #A
+    ex_21 = random_with_p(1000,0.05)    #B
+    ex_22 = random_with_p(10000,0.05)   #C
+
+    ex_23 = random_with_p(10000,0.0005) #same amount of edges as B
+    ex_24 = random_with_p(10000,0.005)  #10 times the edges as B
+
+
     examples = [ex_00, ex_01, ex_02, ex_03,
             ex_04, ex_05, ex_06,
             ex_07,
-            ex_08, ex_09
+            ex_08, ex_09,
+            ex_20, ex_21, ex_22, ex_23, ex_24, 
             ]
 
     for i, ex in enumerate(examples):
-        #print(i, ex)
+        print(i, ex)
         save_unweighted_flag(f'/tmp/{i:02}.flag', ex)
 

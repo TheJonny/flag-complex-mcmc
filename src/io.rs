@@ -7,6 +7,7 @@ use rand::Rng;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use bincode;
+use flate2;
 
 use hdf5;
 use ndarray;
@@ -44,14 +45,18 @@ pub fn save_flag_file<G: DirectedGraph>(fname:&str, graph:&G) -> std::io::Result
 
 // Save/Restore state (serde/bincode)
 pub fn save_state<R: Rng+Serialize>(fname:&str, sample_number:usize, sampler:MCMCSampler<R>) -> std::io::Result<()> {
-    let mut f = std::io::BufWriter::new(File::create(format!("{fname}.tmp")).unwrap());
+    //let mut f = std::io::BufWriter::new(File::create(format!("{fname}.tmp")).unwrap());
+    let mut f = flate2::write::GzEncoder::new(File::create(format!("{fname}.tmp")).unwrap(), flate2::Compression::fast());
+    //let mut f = flate2::write::GzEncoder::new(std::io::BufWriter::new(File::create(format!("{fname}.tmp")).unwrap()), flate2::Compression::fast());
     bincode::serialize_into(&mut f, &(sample_number, sampler)).unwrap();
     std::fs::rename(format!("{fname}.tmp"), fname).expect("moving temp state file to correct location failed");
     return Ok(());
 }
 
 pub fn load_state<R: Rng+DeserializeOwned>(fname:&str) -> std::io::Result<(usize, MCMCSampler<R>)> {
-    let mut f = std::io::BufReader::new(File::open(fname).unwrap());
+    //let mut f = std::io::BufReader::new(File::open(fname).unwrap());
+    let mut f = flate2::read::GzDecoder::new(File::open(fname).unwrap());
+    //let mut f = flate2::bufread::GzDecoder::new(std::io::BufReader::new(File::open(fname).unwrap()));
     let (sample_index_end, sampler) = bincode::deserialize_from(&mut f).unwrap();
     return Ok((sample_index_end, sampler))
 }
