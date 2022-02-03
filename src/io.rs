@@ -46,7 +46,7 @@ pub fn save_flag_file<G: DirectedGraph>(fname:&str, graph:&G) -> std::io::Result
 pub fn save_state<R: Rng+Serialize>(fname:&str, sample_number:usize, sampler:MCMCSampler<R>) -> std::io::Result<()> {
     let mut f = std::io::BufWriter::new(File::create(format!("{fname}.tmp")).unwrap());
     bincode::serialize_into(&mut f, &(sample_number, sampler)).unwrap();
-    std::fs::rename(format!("{fname}.tmp"), fname);
+    std::fs::rename(format!("{fname}.tmp"), fname).expect("moving temp state file to correct location failed");
     return Ok(());
 }
 
