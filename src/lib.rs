@@ -1,4 +1,6 @@
 use std::cmp::{max, min};
+use std::collections::HashMap;
+
 use rand;
 use rand::prelude::*;
 use serde::{Serialize, Deserialize};
@@ -21,7 +23,7 @@ type Graph = EdgeMapGraph;
 pub struct State {
     pub cliques: Vec<Vec<Node>>,
     pub which_cliques: Vec<Vec<CliqueId>>,
-    pub edge_neighborhood: Vec<Vec<Node>>,
+    pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
     pub graph: Graph,
     pub flag_count: Vec<usize>,
     pub flag_count_min: Vec<usize>,
@@ -110,7 +112,7 @@ impl State {
         for &a in &self.cliques[cid as usize] {
             for &b in &self.cliques[cid as usize] {
                 if a > b {
-                    affected_vertices.extend_from_slice(&self.edge_neighborhood[edge_id(a, b)]);
+                    affected_vertices.extend_from_slice(&self.edge_neighborhood[&[a, b]]);
                 }
             }
         }
@@ -122,7 +124,9 @@ impl State {
     pub fn edgeset_neighborhood(&self, edges: &[Edge]) -> Vec<Node>{
         let mut affected_vertices = vec![];
         for &[a,b] in edges {
-            affected_vertices.extend_from_slice(&self.edge_neighborhood[edge_id(a, b)]);
+            let big = max(a, b);
+            let small = min(a,b);
+            affected_vertices.extend_from_slice(&self.edge_neighborhood[&[big, small]]);
             affected_vertices.push(a);
             affected_vertices.push(b);
         }

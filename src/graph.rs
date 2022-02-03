@@ -8,6 +8,7 @@ use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 
 use indexmap::set::IndexSet;
+use std::collections::HashMap;
 
 use std::cmp::{min, max};
 
@@ -232,7 +233,7 @@ pub trait DirectedGraphExt: DirectedGraph {
 
 
     /// for every edge, this gathers the nodes that are connected to both ends.
-    fn compute_edge_neighborhoods(&self) -> Vec<Vec<Node>>{
+    fn compute_edge_neighborhoods(&self) -> HashMap<Edge, Vec<Node>>{
         let mut undirected_adj_lists = vec![vec![]; self.nnodes()];
         let mut undirected_edges = self.edges();
         for e in &mut undirected_edges {
@@ -257,11 +258,11 @@ pub trait DirectedGraphExt: DirectedGraph {
 
             let mut l = crate::util::intersect_sorted(&undirected_adj_lists[a as usize], &undirected_adj_lists[b as usize]);
             l.shrink_to_fit();
-            (edge_id(a, b), l)
+            ([a,b], l)
         }).collect_into_vec(&mut respairs);
-        let mut res = vec![vec![]; self.nnodes() * (self.nnodes()-1) / 2];
-        for (eid, l) in respairs {
-            res[eid] = l;
+        let mut res = HashMap::with_capacity(respairs.len());
+        for (e, l) in respairs {
+            res.insert(e, l);
         }
         
         return res;
