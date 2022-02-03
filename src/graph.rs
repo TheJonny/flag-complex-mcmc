@@ -3,16 +3,22 @@ pub type CliqueId = usize;
 
 pub type Edge = [Node; 2];
 
+use rand::{Rng, prelude::SliceRandom};
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
+
+use indexmap::set::IndexSet;
+
+use std::cmp::{min, max};
 
 pub trait DirectedGraph {
     fn edge(&self, from: Node, to: Node) -> bool;
     fn add_edge(&mut self, from: Node, to: Node);
     fn remove_edge(&mut self, from: Node, to: Node);
     fn nnodes(&self) -> usize;
-    type NodeIterator: Iterator<Item=Node>;
-    fn iter_nodes(&self) -> Self::NodeIterator;
+    fn iter_nodes(&self) -> std::ops::Range<Node> {
+        (0.. (self.nnodes() as Node)).into_iter()
+    }
 
     fn edges(&self) -> Vec<[Node; 2]> {
         let mut edges = vec![];
@@ -112,10 +118,6 @@ impl DirectedGraph for BoolMatrixGraph {
     }
     fn remove_edge(&mut self, from: Node, to: Node) {
         *self.edge_mut(from, to) = false;
-    }
-    type NodeIterator = std::ops::Range<Node>;
-    fn iter_nodes(&self) -> Self::NodeIterator {
-        (0.. (self.nnodes as Node)).into_iter()
     }
     fn set_edge(&mut self, from: Node, to: Node, create: bool) {
         *self.edge_mut(from, to) = create;
@@ -224,7 +226,6 @@ pub trait DirectedGraphExt: DirectedGraph {
     fn compute_edge_neighborhoods(&self) -> Vec<Vec<Node>>{
         let mut undirected_adj_lists = vec![vec![]; self.nnodes()];
         let mut undirected_edges = self.edges();
-        use std::cmp::{min, max};
         for e in &mut undirected_edges {
             let a = max(e[0], e[1]);
             let b = min(e[0], e[1]);
@@ -322,10 +323,6 @@ impl DirectedGraph for CompactMatrixGraph {
         let row = from as usize;
         return self.out_matrix[row * self.row_len + toh] & (1<<tol) != 0;
     }
-    type NodeIterator = std::ops::Range<Node>;
-    fn iter_nodes(&self) -> Self::NodeIterator {
-        (0.. (self.nnodes as Node)).into_iter()
-    }
     fn add_edge(&mut self, from: Node, to: Node) {
         let toh = to as usize / CHUNK_SIZE;
         let tol = to as usize % CHUNK_SIZE;
@@ -382,4 +379,64 @@ impl DirectedGraph for CompactMatrixGraph {
         }
         result
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EdgeMapGraph{
+    nnodes: usize,
+    edges: IndexSet<Edge>,
+    double_edges: IndexSet<Edge>,
+}
+
+impl DirectedGraphNew for EdgeMapGraph {
+    fn new_disconnected(nnodes: usize) -> Self {
+        EdgeMapGraph { nnodes, edges: IndexSet::new(), double_edges: IndexSet::new() }
+    }
+}
+
+impl DirectedGraph for EdgeMapGraph {
+    fn nnodes(&self) -> usize {
+        self.nnodes
+    }
+    fn edge(&self, from: Node, to: Node) -> bool {
+        return self.edges.contains(&[from, to]);
+    }
+    fn add_edge(&mut self, from: Node, to: Node) {
+        self.edges.insert([from, to]);
+        if self.edge(from, to) {
+            let big = max(from, to);
+            let small = min(from, to);
+            self.double_edges.insert([big, small]);
+        }
+    }
+    fn remove_edge(&mut self, from: Node, to: Node){
+        let big = max(from, to);
+        let small = min(from, to);
+        self.double_edges.remove(&[big, small]); // does nothing if it does not exist
+        self.edges.remove(&[from, to]);
+    }
+
+    // FIXME: API ändern, dass nicht kopiert werden muss
+    fn edges(&self) -> Vec<[Node; 2]> {
+        self.edges.iter().cloned().collect()
+    }
+}
+
+impl EdgeMapGraph {
+    pub fn sample_edge<R: Rng>(&self, rng: &mut R) -> Option<Edge> {
+        if self.edges.len() == 0 {
+            return None;
+        }
+        let i = rng.gen_range(0 .. self.edges.len());
+        return Some(self.edges[i]);
+    }
+    pub fn sample_double_edge<R: Rng>(&self, rng: &mut R) -> Option<Edge> {
+        if self.double_edges.len() == 0 {
+            return None;
+        }
+        let i = rng.gen_range(0 .. self.double_edges.len());
+        return Some(self.double_edges[i]);
+    }
+
+    // fn choose_double_edge ->
 }

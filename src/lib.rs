@@ -14,10 +14,10 @@ mod flagser;
 
 //pub mod flag_complex;
 
-type Graph = CompactMatrixGraph;
+type Graph = EdgeMapGraph;
 //type Graph = BoolMatrixGraph;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct State {
     pub cliques: Vec<Vec<Node>>,
     pub which_cliques: Vec<Vec<CliqueId>>,
@@ -142,7 +142,7 @@ fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
     return true;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MCMCSampler<R: Rng> {
     pub state: State,
     pub burn_in: usize,
