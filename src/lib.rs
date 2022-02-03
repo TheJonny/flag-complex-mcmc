@@ -14,7 +14,7 @@ mod flagser;
 
 //pub mod flag_complex;
 
-type Graph = CompactMatrixGraph;
+type Graph = EdgeMapGraph;
 //type Graph = BoolMatrixGraph;
 
 #[derive(Debug, Serialize, Deserialize)]

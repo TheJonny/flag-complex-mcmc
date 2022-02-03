@@ -270,7 +270,6 @@ pub trait DirectedGraphExt: DirectedGraph {
 
 impl<G: DirectedGraph> DirectedGraphExt for G {}
 
-
 pub fn degeneracy_order(g: &BoolMatrixGraph) -> Vec<Node> {
 
     todo!()
@@ -336,20 +335,12 @@ impl DirectedGraph for CompactMatrixGraph {
         let toh = to as usize / CHUNK_SIZE;
         let tol = to as usize % CHUNK_SIZE;
         let row = from as usize;
-        //
-        //if self.out_matrix[row * self.row_len + toh] & (1<<tol) != 0 {
-            //self.out_degrees[from] += 1;
-        //}
         self.out_matrix[row * self.row_len + toh] |= 1<<tol;
     }
     fn remove_edge(&mut self, from: Node, to: Node) {
         let toh = to as usize / CHUNK_SIZE;
         let tol = to as usize % CHUNK_SIZE;
         let row = from as usize;
-        //
-        //if self.out_matrix[row * self.row_len + toh] & (1<<tol) != 0 {
-            //self.out_degrees[from] += 1;
-        //}
         self.out_matrix[row * self.row_len + toh] &= !(1<<tol);
     }
 
@@ -395,11 +386,20 @@ pub struct EdgeMapGraph{
     nnodes: usize,
     edges: IndexSet<Edge, std::hash::BuildHasherDefault<seahash::SeaHasher>>,
     double_edges: IndexSet<Edge, std::hash::BuildHasherDefault<seahash::SeaHasher>>,
+
+    out_matrix: Vec<Chunk>,
+    row_len: usize,
 }
 
 impl DirectedGraphNew for EdgeMapGraph {
     fn new_disconnected(nnodes: usize) -> Self {
-        EdgeMapGraph { nnodes, edges: Default::default(), double_edges: Default::default() }
+        // nnodes / Chunk::BITS, rounded up.
+        let row_len = (nnodes + Chunk::BITS as usize - 1) / (Chunk::BITS as usize);
+
+        let matsize = row_len.checked_mul(nnodes).expect("size of adjacency matrix overflows");
+        let out_matrix = vec![0; matsize];
+        //let out_degrees = vec![0; nnodes];
+        EdgeMapGraph { nnodes, edges: Default::default(), double_edges: Default::default() , out_matrix, row_len}
     }
 }
 
@@ -408,21 +408,46 @@ impl DirectedGraph for EdgeMapGraph {
         self.nnodes
     }
     fn has_edge(&self, from: Node, to: Node) -> bool {
-        return self.edges.contains(&[from, to]);
+        if from as usize >= self.nnodes {
+            panic!("from out of bounds: {} >= {}", from, self.nnodes);
+        }
+        if to as usize >= self.nnodes {
+            panic!("to out of bounds: {} >= {}", to, self.nnodes);
+        }
+        let toh = to as usize / CHUNK_SIZE;
+        let tol = to as usize % CHUNK_SIZE;
+        let row = from as usize;
+        return self.out_matrix[row * self.row_len + toh] & (1<<tol) != 0;
     }
     fn add_edge(&mut self, from: Node, to: Node) {
+        // update hashmaps
         self.edges.insert([from, to]);
-        if self.has_edge(from, to) {
+        if self.has_edge(to, from) {
             let big = max(from, to);
             let small = min(from, to);
             self.double_edges.insert([big, small]);
         }
+
+        // update bits
+        let toh = to as usize / CHUNK_SIZE;
+        let tol = to as usize % CHUNK_SIZE;
+        let row = from as usize;
+        self.out_matrix[row * self.row_len + toh] |= 1<<tol;
     }
     fn remove_edge(&mut self, from: Node, to: Node){
-        let big = max(from, to);
-        let small = min(from, to);
-        self.double_edges.remove(&[big, small]); // does nothing if it does not exist
+        // update hashmaps
+        if self.has_edge(from, to) && self.has_edge(to, from) {
+            let big = max(from, to);
+            let small = min(from, to);
+            self.double_edges.remove(&[big, small]); // does nothing if it does not exist
+        }
         self.edges.remove(&[from, to]);
+
+        //  update bits
+        let toh = to as usize / CHUNK_SIZE;
+        let tol = to as usize % CHUNK_SIZE;
+        let row = from as usize;
+        self.out_matrix[row * self.row_len + toh] &= !(1<<tol);
     }
 
     // FIXME: API ändern, dass nicht kopiert werden muss
