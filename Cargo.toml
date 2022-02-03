@@ -8,14 +8,17 @@ edition = "2021"
 [dependencies]
 libc = "*"
 rand = "*"
-rand_xoshiro = { version = "*", features = ['serde1'] }
 clap = { version = "3.0.8", features = ["derive"] }
 rayon = "*"
+indexmap = {version = "*", features = ["serde"] }
+#output hdf5 saving
 hdf5 = "*"
 ndarray = "*"
-serde = { version = "1.0", features = ["derive"] }
+#state saving
 bincode = "*"
-indexmap = {version = "*", features = ["serde"] }
+flate2 = "*"
+rand_xoshiro = { version = "*", features = ['serde1'] }
+serde = { version = "1.0", features = ["derive"] }
 
 [build-dependencies]
 #bindgen = "*"
