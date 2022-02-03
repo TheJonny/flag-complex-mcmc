@@ -64,6 +64,6 @@ fn main() {
         dbg!(sampler.acceptance_ratio());
     }
 
-    io::save_state(&format!("sampler-{l}-{s:03}.state", l=args.label, s=args.seed), sample_index_end, sampler).unwrap();
+    io::save_state(&format!("sampler-{l}-{s:03}.state.gz", l=args.label, s=args.seed), sample_index_end, sampler).unwrap();
 }
 
