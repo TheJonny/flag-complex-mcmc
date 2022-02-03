@@ -191,7 +191,7 @@ pub struct Transition {
 }
 
 impl Transition {
-    /// new.edge(s[i], s[j]) <-> old.edge(i,j)
+    /// new.has_edge(s[i], s[j]) <-> old.has_edge(i,j)
     pub fn new_clique_shuffling(state: &State, cid: CliqueId, perm: &[usize]) -> Self{
         let cl = &state.cliques[cid as usize];
 
@@ -202,8 +202,8 @@ impl Transition {
         // prepare new adjacency matrix...
         for i in 0 .. cl.len() {
             for j in 0 .. cl.len() {
-                let pre = state.graph.edge(cl[perm[i]], cl[perm[j]]);
-                let post = state.graph.edge(cl[i], cl[j]);
+                let pre = state.graph.has_edge(cl[perm[i]], cl[perm[j]]);
+                let post = state.graph.has_edge(cl[i], cl[j]);
                 if pre != post {
                     change_edges.push(([cl[perm[i]], cl[perm[j]]], post));
                 }
@@ -227,8 +227,8 @@ impl Transition {
         let mut double_edges = vec![];
         for (i,&from) in vertices.iter().enumerate() {
             for &to in &vertices[..i]{
-                if state.graph.edge(from,to) {
-                    if state.graph.edge(to,from) {
+                if state.graph.has_edge(from,to) {
+                    if state.graph.has_edge(to,from) {
                         double_edges.push([from,to]);
                     } else {
                         single_edges.push([from,to]);
