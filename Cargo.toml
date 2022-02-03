@@ -11,6 +11,7 @@ rand = "*"
 clap = { version = "3.0.8", features = ["derive"] }
 rayon = "*"
 indexmap = {version = "*", features = ["serde"] }
+seahash = "*"
 #output hdf5 saving
 hdf5 = "*"
 ndarray = "*"
@@ -19,8 +20,6 @@ bincode = "*"
 flate2 = "*"
 rand_xoshiro = { version = "*", features = ['serde1'] }
 serde = { version = "1.0", features = ["derive"] }
-
-seahash = "*"
 
 [build-dependencies]
 #bindgen = "*"
