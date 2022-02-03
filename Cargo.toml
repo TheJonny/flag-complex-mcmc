@@ -17,6 +17,8 @@ serde = { version = "1.0", features = ["derive"] }
 bincode = "*"
 indexmap = {version = "*", features = ["serde"] }
 
+seahash = "*"
+
 [build-dependencies]
 #bindgen = "*"
 cc = "*"

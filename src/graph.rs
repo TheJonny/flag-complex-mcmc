@@ -11,6 +11,8 @@ use indexmap::set::IndexSet;
 
 use std::cmp::{min, max};
 
+use seahash;
+
 pub trait DirectedGraph {
     fn edge(&self, from: Node, to: Node) -> bool;
     fn add_edge(&mut self, from: Node, to: Node);
@@ -391,13 +393,13 @@ impl DirectedGraph for CompactMatrixGraph {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EdgeMapGraph{
     nnodes: usize,
-    edges: IndexSet<Edge>,
-    double_edges: IndexSet<Edge>,
+    edges: IndexSet<Edge, std::hash::BuildHasherDefault<seahash::SeaHasher>>,
+    double_edges: IndexSet<Edge, std::hash::BuildHasherDefault<seahash::SeaHasher>>,
 }
 
 impl DirectedGraphNew for EdgeMapGraph {
     fn new_disconnected(nnodes: usize) -> Self {
-        EdgeMapGraph { nnodes, edges: IndexSet::new(), double_edges: IndexSet::new() }
+        EdgeMapGraph { nnodes, edges: Default::default(), double_edges: Default::default() }
     }
 }
 
