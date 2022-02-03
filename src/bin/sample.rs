@@ -43,7 +43,7 @@ fn main() {
     let args = Args::parse();
     
     let (sample_index_start, mut sampler) = if !args.continue_from.is_empty() {
-        io::load_state(&args.label, args.seed).expect("unable to load state")
+        io::load_state(&args.continue_from).expect("unable to load state")
     } else {
         let g = io::read_flag_file(&args.input);
         io::new_hdf_file(&args.label, args.seed).unwrap();
@@ -64,6 +64,6 @@ fn main() {
         dbg!(sampler.acceptance_ratio());
     }
 
-    io::save_state(&args.label, args.seed, sample_index_end, sampler).unwrap();
+    io::save_state(&format!("sampler-{l}-{s}.state", l=args.label, s=args.seed), sample_index_end, sampler).unwrap();
 }
 

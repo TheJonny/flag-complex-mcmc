@@ -3,7 +3,9 @@ use std::io::prelude::*;
 use crate::graph::*;
 
 use crate::MCMCSampler;
-use rand_xoshiro::Xoshiro256StarStar;
+use rand::Rng;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use bincode;
 
 use hdf5;
@@ -41,14 +43,15 @@ pub fn save_flag_file<G: DirectedGraph>(fname:&str, graph:&G) -> std::io::Result
 }
 
 // Save/Restore state (serde/bincode)
-pub fn save_state(label:&str, seed:u64, sample_number:usize, sampler:MCMCSampler<Xoshiro256StarStar>) -> std::io::Result<()> {
-    let mut f = std::io::BufWriter::new(File::create(format!("sampler-{label}-{seed:03}.state")).unwrap());
+pub fn save_state<R: Rng+Serialize>(fname:&str, sample_number:usize, sampler:MCMCSampler<R>) -> std::io::Result<()> {
+    let mut f = std::io::BufWriter::new(File::create(format!("{fname}.tmp")).unwrap());
     bincode::serialize_into(&mut f, &(sample_number, sampler)).unwrap();
+    std::fs::rename(format!("{fname}.tmp"), fname);
     return Ok(());
 }
 
-pub fn load_state(label:&str, seed:u64) -> std::io::Result<(usize, MCMCSampler<Xoshiro256StarStar>)> {
-    let mut f = std::io::BufReader::new(File::open(format!("sampler-{label}-{seed:03}.state")).unwrap());
+pub fn load_state<R: Rng+DeserializeOwned>(fname:&str) -> std::io::Result<(usize, MCMCSampler<R>)> {
+    let mut f = std::io::BufReader::new(File::open(fname).unwrap());
     let (sample_index_end, sampler) = bincode::deserialize_from(&mut f).unwrap();
     return Ok((sample_index_end, sampler))
 }
