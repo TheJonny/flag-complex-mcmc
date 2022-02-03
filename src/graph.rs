@@ -14,7 +14,7 @@ use std::cmp::{min, max};
 use seahash;
 
 pub trait DirectedGraph {
-    fn edge(&self, from: Node, to: Node) -> bool;
+    fn has_edge(&self, from: Node, to: Node) -> bool;
     fn add_edge(&mut self, from: Node, to: Node);
     fn remove_edge(&mut self, from: Node, to: Node);
     fn nnodes(&self) -> usize;
@@ -26,7 +26,7 @@ pub trait DirectedGraph {
         let mut edges = vec![];
         for from in self.iter_nodes() {
             for to in self.iter_nodes() {
-                if self.edge(from, to) {
+                if self.has_edge(from, to) {
                     edges.push([from, to]);
                 }
             }
@@ -45,7 +45,7 @@ pub trait DirectedGraph {
     fn edges_from(&self, from: Node) -> Vec<Node>{
         let mut res = vec![];
         for to in self.iter_nodes() {
-            if self.edge(from, to) {
+            if self.has_edge(from, to) {
                 res.push(to);
             }
         }
@@ -62,7 +62,7 @@ pub trait DirectedGraphNew: DirectedGraph + Sized {
         let mut sub = Self::new_disconnected(vertices.len());
         for (new_from, &ori_from) in (0..).zip(vertices.iter()) {
             for (new_to, &ori_to) in (0..).zip(vertices.iter()) {
-                if ori.edge(ori_from, ori_to) {
+                if ori.has_edge(ori_from, ori_to) {
                     sub.add_edge(new_from, new_to);
                 }
             }
@@ -112,7 +112,7 @@ impl DirectedGraph for BoolMatrixGraph {
     fn nnodes(&self) -> usize {
         return self.nnodes;
     }
-    fn edge(&self, from: Node, to: Node) -> bool{
+    fn has_edge(&self, from: Node, to: Node) -> bool{
         if from as usize >= self.nnodes {
             panic!("from out of bounds");
         }
@@ -161,8 +161,8 @@ pub trait DirectedGraphExt: DirectedGraph {
             res.push(r.clone());
         }
         for (i,&v) in (0..).zip(&p) {
-            let newp = p[i..].iter().cloned().filter(|&u| self.edge(u,v) || self.edge(v,u)).collect();
-            let newx = x.iter().cloned().filter(|&u| self.edge(u,v) || self.edge(v,u)).collect();
+            let newp = p[i..].iter().cloned().filter(|&u| self.has_edge(u,v) || self.has_edge(v,u)).collect();
+            let newx = x.iter().cloned().filter(|&u| self.has_edge(u,v) || self.has_edge(v,u)).collect();
             let addv = !r.contains(&v);
             if addv {
                 r.push(v);
@@ -206,14 +206,14 @@ pub trait DirectedGraphExt: DirectedGraph {
 
         for i in 0..p.len() {
             let v = p[i];
-            if self.edge(v, pivot) || self.edge(pivot, v) {
+            if self.has_edge(v, pivot) || self.has_edge(pivot, v) {
                 // skipping will exclude v=p[i] from p[i..].
                 // so add it at the back to keep it.
                 p.push(v);
                 continue;
             }
-            let newp = p[i..].iter().cloned().filter(|&u| self.edge(u,v) || self.edge(v,u)).collect();
-            let newx = x.iter().cloned().filter(|&u| self.edge(u,v) || self.edge(v,u)).collect();
+            let newp = p[i..].iter().cloned().filter(|&u| self.has_edge(u,v) || self.has_edge(v,u)).collect();
+            let newx = x.iter().cloned().filter(|&u| self.has_edge(u,v) || self.has_edge(v,u)).collect();
             let addv = !r.contains(&v);
             if addv {
                 r.push(v);
@@ -320,7 +320,7 @@ impl DirectedGraph for CompactMatrixGraph {
     fn nnodes(&self) -> usize {
         return self.nnodes;
     }
-    fn edge(&self, from: Node, to: Node) -> bool {
+    fn has_edge(&self, from: Node, to: Node) -> bool {
         if from as usize >= self.nnodes {
             panic!("from out of bounds: {} >= {}", from, self.nnodes);
         }
@@ -407,12 +407,12 @@ impl DirectedGraph for EdgeMapGraph {
     fn nnodes(&self) -> usize {
         self.nnodes
     }
-    fn edge(&self, from: Node, to: Node) -> bool {
+    fn has_edge(&self, from: Node, to: Node) -> bool {
         return self.edges.contains(&[from, to]);
     }
     fn add_edge(&mut self, from: Node, to: Node) {
         self.edges.insert([from, to]);
-        if self.edge(from, to) {
+        if self.has_edge(from, to) {
             let big = max(from, to);
             let small = min(from, to);
             self.double_edges.insert([big, small]);
