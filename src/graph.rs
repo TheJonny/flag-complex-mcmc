@@ -67,6 +67,13 @@ pub trait DirectedGraphNew: DirectedGraph + Sized {
         }
         return sub;
     }
+    fn copy<G: DirectedGraph>(g: &G) -> Self {
+        let mut n = Self::new_disconnected(g.nnodes());
+        for [a,b] in g.edges() {
+            n.add_edge(a, b);
+        }
+        return n
+    }
 }
 
 #[derive(Clone)]
@@ -440,3 +447,4 @@ impl EdgeMapGraph {
 
     // fn choose_double_edge ->
 }
+

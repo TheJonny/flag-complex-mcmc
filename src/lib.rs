@@ -29,7 +29,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(graph: Graph) -> Self {
+    pub fn new(graph: CompactMatrixGraph) -> Self {
 
         println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
@@ -51,6 +51,8 @@ impl State {
 
         println!("computing edge neighborhoods");
         let edge_neighborhood = graph.compute_edge_neighborhoods();
+
+        let graph = Graph::copy(&graph);
 
         State { graph, cliques, which_cliques, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
     }
