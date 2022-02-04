@@ -2,6 +2,7 @@ use std::cmp::{max, min};
 use std::collections::HashMap;
 
 use rand;
+use rand::distributions::WeightedIndex;
 use rand::prelude::*;
 use serde::{Serialize, Deserialize};
 
@@ -151,6 +152,7 @@ fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MCMCSampler<R: Rng> {
     pub state: State,
+    pub move_distribution: WeightedIndex<f64>,
     pub burn_in: usize,
     pub sample_distance: usize,
     pub sampled: usize,
@@ -195,6 +197,12 @@ pub struct Transition {
 }
 
 impl Transition {
+    pub fn random_next_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>) -> Self {
+        let choices = [Transition::single_edge_flip, Transition::double_edge_move, Transition::new_clique_shuffling];
+        let random_move = choices[move_distribution.sample(&mut rng)];
+        return random_move(state, rng);
+    }
+
     /// new.has_edge(s[i], s[j]) <-> old.has_edge(i,j)
     pub fn new_clique_shuffling(state: &State, cid: CliqueId, perm: &[usize]) -> Self{
         let cl = &state.cliques[cid as usize];
@@ -213,7 +221,7 @@ impl Transition {
                 }
             }
         }
-        Transition {change_edges}
+        return Transition{change_edges};
     }
     pub fn random_clique_shuffling<R: Rng>(state: &State, rng: &mut R) -> Self {
         let cid = rng.gen_range(0..state.cliques.len() as CliqueId);
@@ -223,7 +231,7 @@ impl Transition {
         return Transition::new_clique_shuffling(state, cid, &perm);
     }
 
-    pub fn random_edge_flip<R: Rng>(state: &State, rng: &mut R) -> Self {
+    pub fn single_edge_flip<R: Rng>(state: &State, rng: &mut R) -> Self {
         if let Some([from, to]) = state.graph.sample_edge(rng) {
             if !state.graph.has_edge(to, from) { // its a single edge
                 return Transition{change_edges: vec![([from,to], false), ([to,from], true)]};
@@ -232,7 +240,7 @@ impl Transition {
         return Transition{change_edges: vec![]};
     }
     
-    pub fn random_double_edge_move<R: Rng>(state: &State, rng: &mut R) -> Self {
+    pub fn double_edge_move<R: Rng>(state: &State, rng: &mut R) -> Self {
         // if there is no edge, return an empty transition below
         if let Some(double_edge) = state.graph.sample_double_edge(rng) {
             // FIXME: assert somewhere, that there are single edges.
