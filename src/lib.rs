@@ -223,51 +223,35 @@ impl Transition {
         return Transition::new_clique_shuffling(state, cid, &perm);
     }
 
-    fn edges_from_clique(state: &State, cid: usize) -> (Vec<Edge>, Vec<Edge>) {
-        // gets a clique id and returns a vector of its single and a vector of its double edges.
-        // TODO: refactor, should not be part of Transition
-        let vertices = &state.cliques[cid];
-        let mut single_edges = vec![];
-        let mut double_edges = vec![];
-        for (i,&from) in vertices.iter().enumerate() {
-            for &to in &vertices[..i]{
-                if state.graph.has_edge(from,to) {
-                    if state.graph.has_edge(to,from) {
-                        double_edges.push([from,to]);
-                    } else {
-                        single_edges.push([from,to]);
-                    }
-                } else {
-                    single_edges.push([to,from]);
-                }
+    pub fn random_edge_flip<R: Rng>(state: &State, rng: &mut R) -> Self {
+        if let Some([from, to]) = state.graph.sample_edge(rng) {
+            if !state.graph.has_edge(to, from) { // its a single edge
+                return Transition{change_edges: vec![([from,to], false), ([to,from], true)]};
             }
         }
-        return (single_edges, double_edges);
-    }
-
-    pub fn random_edge_swap<R: Rng>(state: &State, rng: &mut R) -> Self {
-        let cid = rng.gen_range(0..state.cliques.len() as CliqueId);
-        let (single_edges, _) = Transition::edges_from_clique(state, cid);
-        if let Some(&[from,to]) = single_edges.choose(rng) {
-            return Transition{change_edges: vec![([from,to], false), ([to,from], true)]};
-        } else {
-            return Transition{change_edges: vec![]};
-        }
-
+        return Transition{change_edges: vec![]};
     }
     
-    /* TODO: Jonathan machen lassen
     pub fn random_double_edge_move<R: Rng>(state: &State, rng: &mut R) -> Self {
-        let [cid1,cid2] = rand::seq::index::sample(rng, state.cliques.len(), 2).into_vec()[..];
-        let (single_edges1, double_edges1) = Transition::edges_from_clique(state, cid1);
-        let (single_edges2, double_edges2) = Transition::edges_from_clique(state, cid2);
-        if let Some(&[from1,to1]) = single_edges_1.choose(rng) && let Some(&[from2,to2]) = double_edges_2.choose(rng) 
-                || let Some(&[from1,to1]) = single_edges_2.choose(rng) && let Some(&[from2,to2]) = double_edges_1.choose(rng) {
-            [from2, to2] = [[from2,to2], [to2,from2]].choose(rng);
-            return Transition{change_edges: vec![([from2,to2], false), ([to1,from1], true)]};
-        } else {
-            return Transition{change_edges: vec![]};
+        // if there is no edge, return an empty transition below
+        if let Some(double_edge) = state.graph.sample_double_edge(rng) {
+            // FIXME: assert somewhere, that there are single edges.
+            let [a,b] = loop {
+                let [a,b] = state.graph.sample_edge(rng).expect("there was a double edge, so there are edges");
+                if !state.graph.has_edge(b, a) {
+                    break [a,b];
+                }
+            };
+            // a,b is a single edge -> make it double
+            // then remove a random side of double_edge
+            let delme = if rng.gen_bool(0.5) {
+                double_edge
+            } else {
+                [double_edge[1], double_edge[0]]
+            };
+
+            return Transition { change_edges: vec![([b,a], true), (delme, false)] }
         }
+        return Transition{change_edges: vec![]};
     }
-    */
 }
