@@ -3,7 +3,7 @@ pub type CliqueId = usize;
 
 pub type Edge = [Node; 2];
 
-use rand::{Rng, prelude::SliceRandom};
+use rand::Rng;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 
@@ -271,11 +271,12 @@ pub trait DirectedGraphExt: DirectedGraph {
 
 impl<G: DirectedGraph> DirectedGraphExt for G {}
 
+/*
 pub fn degeneracy_order(g: &BoolMatrixGraph) -> Vec<Node> {
 
     todo!()
 }
-
+*/
 
 /// undirected edge pair to index in triangular adjacency matrix
 /// ```
