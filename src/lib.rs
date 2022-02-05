@@ -198,8 +198,8 @@ pub struct Transition {
 
 impl Transition {
     pub fn random_next_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>) -> Self {
-        let choices = [Transition::single_edge_flip, Transition::double_edge_move, Transition::new_clique_shuffling];
-        let random_move = choices[move_distribution.sample(&mut rng)];
+        let choices = [Transition::single_edge_flip, Transition::double_edge_move, Transition::random_clique_shuffling];
+        let random_move = choices[move_distribution.sample(rng)];
         return random_move(state, rng);
     }
 
