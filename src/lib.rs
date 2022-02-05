@@ -22,8 +22,7 @@ type Graph = EdgeMapGraph;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct State {
-    pub cliques: Vec<Vec<Node>>,
-    pub which_cliques: Vec<Vec<CliqueId>>,
+    pub cliques_by_order: Vec<Vec<Vec<Node>>>,
     pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
     pub graph: Graph,
     pub flag_count: Vec<usize>,
@@ -33,14 +32,15 @@ pub struct State {
 
 impl State {
     pub fn new(graph: CompactMatrixGraph) -> Self {
-
         println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
-        let mut which_cliques = vec![Vec::new(); graph.nnodes()];
-        for (c,cid) in cliques.iter().zip(0..) {
-            for &v in c  {
-                which_cliques[v as usize].push(cid);
+        let mut cliques_by_order = vec![];
+        for c in cliques {
+            let clique_order = c.len();
+            if clique_order > cliques_by_order.len() {
+                cliques_by_order.resize(clique_order, vec![]);
             }
+            cliques_by_order[clique_order-1].push(c);
         }
         println!("initial flagser");
         let flag_count = graph.flagser_count();
@@ -57,7 +57,7 @@ impl State {
 
         let graph = Graph::copy(&graph);
 
-        State { graph, cliques, which_cliques, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
+        State { graph, cliques_by_order, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
     }
 
     /// applies transition, returns the change in simplex counts
@@ -105,22 +105,6 @@ impl State {
             && all_le(&self.flag_count, &self.flag_count_max, &0);
     }
 
-    /// returns the subgraph affected by shuffling vertices/edges in clique cid.
-    /// it consists of all cliques, that share at least one edge with cid.
-    pub fn clique_neighborhood(&self, cid: CliqueId) -> Vec<Node> {
-
-        let mut affected_vertices = self.cliques[cid].clone();
-        for &a in &self.cliques[cid as usize] {
-            for &b in &self.cliques[cid as usize] {
-                if a > b {
-                    affected_vertices.extend_from_slice(&self.edge_neighborhood[&[a, b]]);
-                }
-            }
-        }
-        affected_vertices.sort_unstable();
-        affected_vertices.dedup();
-        return affected_vertices;
-    }
 
     pub fn edgeset_neighborhood(&self, edges: &[Edge]) -> Vec<Node>{
         let mut affected_vertices = vec![];
@@ -161,10 +145,11 @@ pub struct MCMCSampler<R: Rng> {
 }
 
 impl<R: Rng> MCMCSampler<R> {
+    //TODO: FIX DUPLICATE CODE!
     pub fn burn_in(&mut self) {
         while self.burn_in > 0 {
             self.burn_in -= 1;
-            let t = Transition::random_clique_shuffling(&self.state, &mut self.rng);
+            let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution);
             let counters = self.state.apply_transition(&t);
             if ! self.state.valid() {
                 self.state.revert_transition(&t, &counters);
@@ -173,7 +158,7 @@ impl<R: Rng> MCMCSampler<R> {
     }
     pub fn next(&mut self) -> &State{
         for _ in 0..self.sample_distance {
-            let t = Transition::random_clique_shuffling(&self.state, &mut self.rng);
+            let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution);
             let counters = self.state.apply_transition(&t);
             self.sampled += 1;
             if self.state.valid() {
@@ -197,12 +182,13 @@ pub struct Transition {
 }
 
 impl Transition {
-    pub fn random_next_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>) -> Self {
-        let choices = [Transition::single_edge_flip, Transition::double_edge_move, Transition::random_clique_shuffling];
-        let random_move = choices[move_distribution.sample(rng)];
+    pub fn random_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>) -> Self {
+        let potential_moves = [Transition::single_edge_flip, Transition::double_edge_move, Transition::clique_swap];
+        let random_move = potential_moves[move_distribution.sample(rng)];
         return random_move(state, rng);
     }
 
+    /*
     /// new.has_edge(s[i], s[j]) <-> old.has_edge(i,j)
     pub fn new_clique_shuffling(state: &State, cid: CliqueId, perm: &[usize]) -> Self{
         let cl = &state.cliques[cid as usize];
@@ -229,6 +215,57 @@ impl Transition {
         let mut perm = (0..n).collect::<Vec<usize>>();
         perm.shuffle(rng);
         return Transition::new_clique_shuffling(state, cid, &perm);
+    }
+    */
+
+    pub fn clique_swap<R: Rng>(state: &State, rng: &mut R) -> Self {
+        let dist_on_clique_order = WeightedIndex::new(state.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>()).unwrap();
+        let cliques_of_fixed_order = &state.cliques_by_order[dist_on_clique_order.sample(rng)];
+        //let [m1,m2] = cliques_of_fixed_order.choose_multiple(rng, 2).collect::<[Vec<Node>;2]>();
+        let m1 = cliques_of_fixed_order.choose(rng).unwrap();
+        let m2 = cliques_of_fixed_order.choose(rng).unwrap();
+
+        // let perm = (0..m1.len()).collect::<Vec<usize>>().shuffle(rng); TODO:WHY DOES THIS NOT WORK?
+        let mut perm = (0..m1.len()).collect::<Vec<usize>>();
+        perm.shuffle(rng);
+        let perm_inv = inverse_permutation(&perm);
+        
+        let mut new_edges = Vec::<Edge>::new();
+        let mut old_edges = Vec::<Edge>::new();
+        for i in 0..m1.len() {
+            for j in 0..m1.len() {
+                if state.graph.has_edge(m1[i], m1[j]) {
+                    new_edges.push([m2[perm[i]], m2[perm[j]]]);
+                    old_edges.push([m1[i], m1[j]]);
+                }
+                if state.graph.has_edge(m2[i], m2[j]) {
+                    new_edges.push([m1[perm_inv[i]], m1[perm_inv[j]]]);
+                    old_edges.push([m2[i], m2[j]]);
+                }
+            }
+        }
+        new_edges.sort();
+        new_edges.dedup();
+        old_edges.sort();
+        old_edges.dedup();
+        dbg!((&m1, &m2));
+        dbg!((&perm, &perm_inv));
+        dbg!(&new_edges);
+        dbg!(&old_edges);
+
+        let mut change_edges = vec![];
+        for ne in new_edges {
+            if old_edges.contains(&ne) {
+                old_edges.retain(|&e| e != ne);
+            } else {
+                change_edges.push((ne, true));
+            }
+        }
+        for oe in old_edges {
+            change_edges.push((oe, false));
+        }
+        dbg!(&change_edges);
+        return Transition{change_edges};
     }
 
     pub fn single_edge_flip<R: Rng>(state: &State, rng: &mut R) -> Self {
@@ -262,4 +299,13 @@ impl Transition {
         }
         return Transition{change_edges: vec![]};
     }
+}
+
+// TODO: Move to some utils slot or replace by choosing a crate with inverse
+pub fn inverse_permutation(perm: &Vec<usize>) -> Vec<usize> {
+    let mut inv_perm = perm.clone();
+    for i in 0..perm.len() {
+        inv_perm[perm[i]] = i;
+    }
+    return inv_perm;
 }
