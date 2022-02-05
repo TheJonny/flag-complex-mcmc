@@ -1,5 +1,5 @@
 use std::cmp::{max, min};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use rand;
 use rand::distributions::WeightedIndex;
@@ -221,37 +221,56 @@ impl Transition {
     pub fn clique_swap<R: Rng>(state: &State, rng: &mut R) -> Self {
         let dist_on_clique_order = WeightedIndex::new(state.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>()).unwrap();
         let cliques_of_fixed_order = &state.cliques_by_order[dist_on_clique_order.sample(rng)];
-        //let [m1,m2] = cliques_of_fixed_order.choose_multiple(rng, 2).collect::<[Vec<Node>;2]>();
+        //let m1 = HashSet::from_iter(cliques_of_fixed_order.choose(rng).unwrap().iter());
+        //let m2 = HashSet::from_iter(cliques_of_fixed_order.choose(rng).unwrap().iter());
         let m1 = cliques_of_fixed_order.choose(rng).unwrap();
         let m2 = cliques_of_fixed_order.choose(rng).unwrap();
-
-        // let perm = (0..m1.len()).collect::<Vec<usize>>().shuffle(rng); TODO:WHY DOES THIS NOT WORK?
-        let mut perm = (0..m1.len()).collect::<Vec<usize>>();
-        perm.shuffle(rng);
-        let perm_inv = inverse_permutation(&perm);
         
+        let c = vec_intersect(&m1, &m2);
+        let d = {let mut x = c.clone(); x.extend(&vec_setminus(&m1,&c)); x.extend(&vec_setminus(&m2,&c)); x};
+
+        let n_c = c.len();
+        let n_d = d.len();
+        let n_a = m1.len() - n_c;
+        
+        //dbg!((&m1,&m2));
+        //dbg!((n_c, n_d, n_a));
+        
+        let perm_c = perm(0, n_c, rng);
+        let perm_a = perm(n_c, n_c+n_a, rng);
+        let perm_b = perm(n_c+n_a, n_d, rng);
+
+        let perm_d = {let mut x = perm_c.clone(); x.extend(&perm_b); x.extend(&perm_a); x};
+        //dbg!(&d);
+        //dbg!(&perm_d);
+
+        //TODO VIEEEEEL SCHÖNER
         let mut new_edges = Vec::<Edge>::new();
         let mut old_edges = Vec::<Edge>::new();
-        for i in 0..m1.len() {
-            for j in 0..m1.len() {
-                if state.graph.has_edge(m1[i], m1[j]) {
-                    new_edges.push([m2[perm[i]], m2[perm[j]]]);
-                    old_edges.push([m1[i], m1[j]]);
-                }
-                if state.graph.has_edge(m2[i], m2[j]) {
-                    new_edges.push([m1[perm_inv[i]], m1[perm_inv[j]]]);
-                    old_edges.push([m2[i], m2[j]]);
+        for i in 0..n_c + n_a {
+            for j in 0..n_c + n_a {
+                if state.graph.has_edge(d[i], d[j]) {
+                    new_edges.push([d[perm_d[i]], d[perm_d[j]]]);
+                    old_edges.push([d[i], d[j]]);
                 }
             }
         }
-        new_edges.sort();
-        new_edges.dedup();
-        old_edges.sort();
-        old_edges.dedup();
-        dbg!((&m1, &m2));
-        dbg!((&perm, &perm_inv));
-        dbg!(&new_edges);
-        dbg!(&old_edges);
+        for i in (0..n_c).chain(n_c+n_a..n_d) {
+            for j in (0..n_c).chain(n_c+n_a..n_d) {
+                if state.graph.has_edge(d[i], d[j]) {
+                    new_edges.push([d[perm_d[i]], d[perm_d[j]]]);
+                    old_edges.push([d[i], d[j]]);
+                }
+            }
+        }
+        //new_edges.sort();
+        //new_edges.dedup();
+        //old_edges.sort();
+        //old_edges.dedup();
+        //dbg!((&m1, &m2));
+        //dbg!((C,D));
+        //dbg!(&new_edges);
+        //dbg!(&old_edges);
 
         let mut change_edges = vec![];
         for ne in new_edges {
@@ -264,7 +283,7 @@ impl Transition {
         for oe in old_edges {
             change_edges.push((oe, false));
         }
-        dbg!(&change_edges);
+        //dbg!(&change_edges);
         return Transition{change_edges};
     }
 
@@ -309,3 +328,28 @@ pub fn inverse_permutation(perm: &Vec<usize>) -> Vec<usize> {
     }
     return inv_perm;
 }
+
+pub fn perm<R: Rng>(l: usize, h:usize, rng: &mut R) -> Vec<usize> {
+    let mut perm : Vec<usize> = (l..h).collect();
+    perm.shuffle(rng);
+    return perm;
+}
+
+pub fn vec_intersect(xs: &Vec<Node>, ys: &Vec<Node>) -> Vec<Node> {
+    // assumes uniqueness
+    let mut r = vec![];
+    for x in xs {
+        if ys.contains(&x) {
+            r.push(x.clone());
+        }
+    }
+    return r;
+}
+
+pub fn vec_setminus(xs: &Vec<Node>, ys: &Vec<Node>) -> Vec<Node> {
+    // xs - ys: return vec contains xs minus the elements in ys
+    let mut r = xs.clone();
+    r.retain(|x| !ys.contains(x));
+    return r;
+}
+
