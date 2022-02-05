@@ -167,6 +167,7 @@ impl<R: Rng> MCMCSampler<R> {
             else {
                 self.state.revert_transition(&t, &counters);
             }
+            //println!("whole graph flag count: {:?}", &self.state.graph.flagser_count());
         }
         return &self.state;
     }
@@ -183,7 +184,9 @@ pub struct Transition {
 
 impl Transition {
     pub fn random_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>) -> Self {
-        let potential_moves = [Transition::single_edge_flip, Transition::double_edge_move, Transition::clique_swap];
+        let potential_moves = [Transition::single_edge_flip, Transition::double_edge_move,
+                                //Transition::clique_permute,
+                                Transition::clique_swap];
         let random_move = potential_moves[move_distribution.sample(rng)];
         return random_move(state, rng);
     }
@@ -209,7 +212,7 @@ impl Transition {
         }
         return Transition{change_edges};
     }
-    pub fn random_clique_shuffling<R: Rng>(state: &State, rng: &mut R) -> Self {
+    pub fn clique_permute<R: Rng>(state: &State, rng: &mut R) -> Self {
         let cid = rng.gen_range(0..state.cliques.len() as CliqueId);
         let n = state.cliques[cid].len();
         let mut perm = (0..n).collect::<Vec<usize>>();
@@ -217,6 +220,7 @@ impl Transition {
         return Transition::new_clique_shuffling(state, cid, &perm);
     }
     */
+    
 
     pub fn clique_swap<R: Rng>(state: &State, rng: &mut R) -> Self {
         let dist_on_clique_order = WeightedIndex::new(state.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>()).unwrap();
@@ -233,10 +237,11 @@ impl Transition {
         let n_d = d.len();
         let n_a = m1.len() - n_c;
         
-        //dbg!((&m1,&m2));
+        //println!("m1, m2 are:{:?}, thus c,d are: {:?}", (&m1,&m2), (&c,&d));
         //dbg!((n_c, n_d, n_a));
         
-        let perm_c = perm(0, n_c, rng);
+        //let perm_c = perm(0, n_c, rng);   //with perm on c
+        let perm_c = (0..n_c).collect::<Vec<usize>>();
         let perm_a = perm(n_c, n_c+n_a, rng);
         let perm_b = perm(n_c+n_a, n_d, rng);
 
@@ -263,14 +268,10 @@ impl Transition {
                 }
             }
         }
-        //new_edges.sort();
-        //new_edges.dedup();
-        //old_edges.sort();
-        //old_edges.dedup();
-        //dbg!((&m1, &m2));
-        //dbg!((C,D));
-        //dbg!(&new_edges);
-        //dbg!(&old_edges);
+        new_edges.sort();
+        new_edges.dedup();
+        old_edges.sort();
+        old_edges.dedup();
 
         let mut change_edges = vec![];
         for ne in new_edges {
@@ -283,7 +284,7 @@ impl Transition {
         for oe in old_edges {
             change_edges.push((oe, false));
         }
-        //dbg!(&change_edges);
+        //println!("{:?}", &change_edges);
         return Transition{change_edges};
     }
 
