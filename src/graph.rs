@@ -3,7 +3,8 @@ pub type CliqueId = usize;
 
 pub type Edge = [Node; 2];
 
-use rand::{Rng, prelude::SliceRandom};
+//use rand::{Rng, prelude::SliceRandom};
+use rand::prelude::*;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 
@@ -14,7 +15,7 @@ use std::cmp::{min, max};
 
 use seahash;
 
-pub trait DirectedGraph {
+pub trait DirectedGraph: Sync {
     fn has_edge(&self, from: Node, to: Node) -> bool;
     fn add_edge(&mut self, from: Node, to: Node);
     fn remove_edge(&mut self, from: Node, to: Node);
@@ -147,6 +148,22 @@ pub trait DirectedGraphExt: DirectedGraph {
         self.bron_kerbosch(&mut r, p, x, &mut res);
         return res;
     }
+    fn compute_cliques(&self) -> Vec<Vec<Node>> {
+        let mut edges = self.edges();
+        for e in &mut edges {
+            e.sort();
+        }
+        let mut normalized_graph = EdgeMapGraph::new_disconnected(self.nnodes());
+        for [a,b] in edges {
+            normalized_graph.add_edge(a, b);
+        }
+        let mut result = vec![];
+        let mut add = |cell: &[Node]| {
+            result.push(cell.into())
+        };
+        crate::flag_complex::for_each_cell(&normalized_graph, &mut add, 0, self.nnodes());
+        return result
+    }
     /// recursion for compute_maximal_cliques
     fn bron_kerbosch(&self, r: &mut Vec<Node>, p: Vec<Node>, mut x: Vec<Node>, res: &mut Vec<Vec<Node>>) {
         // from wikipedia: https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm
@@ -227,55 +244,15 @@ pub trait DirectedGraphExt: DirectedGraph {
         }
     }
 
+    
     fn flagser_count(&self) -> Vec<usize> {
-        crate::flagser::count_unweighted(self.nnodes(), &self.edges())
+        //crate::flagser::count_unweighted(self.nnodes(), &self.edges())
+        crate::flag_complex::count_cells(self)
     }
 
-
-    /// for every edge, this gathers the nodes that are connected to both ends.
-    fn compute_edge_neighborhoods(&self) -> HashMap<Edge, Vec<Node>>{
-        let mut undirected_adj_lists = vec![vec![]; self.nnodes()];
-        let mut undirected_edges = self.edges();
-        for e in &mut undirected_edges {
-            let a = max(e[0], e[1]);
-            let b = min(e[0], e[1]);
-            *e = [a, b];
-        }
-        undirected_edges.sort_unstable();
-        undirected_edges.dedup();
-
-        for [a,b] in self.edges() {
-            undirected_adj_lists[a as usize].push(b);
-            undirected_adj_lists[b as usize].push(a);
-        }
-        for v in &mut undirected_adj_lists {
-            v.sort_unstable();
-        }
-        
-        let mut respairs = vec![];
-        undirected_edges.par_iter().map(|&[a, b]| {
-            assert!(a > b);
-
-            let mut l = crate::util::intersect_sorted(&undirected_adj_lists[a as usize], &undirected_adj_lists[b as usize]);
-            l.shrink_to_fit();
-            ([a,b], l)
-        }).collect_into_vec(&mut respairs);
-        let mut res = HashMap::with_capacity(respairs.len());
-        for (e, l) in respairs {
-            res.insert(e, l);
-        }
-        
-        return res;
-    }
 }
 
 impl<G: DirectedGraph> DirectedGraphExt for G {}
-
-pub fn degeneracy_order(g: &BoolMatrixGraph) -> Vec<Node> {
-
-    todo!()
-}
-
 
 /// undirected edge pair to index in triangular adjacency matrix
 /// ```
