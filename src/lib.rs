@@ -63,7 +63,8 @@ impl State {
         let (edge_neighborhoods, max_by_dim) = compute_edge_infos(&graph);
         let nchange_dims = max_by_dim.len().checked_sub(2).expect("there should be at least one edge!");
 
-        for (m, f) in zip_longest(max_by_dim.iter(), 
+        //for (m, f) in zip_longest(max_by_dim.iter(), 
+        // TODO: flag_count_max/min abhängig von max_by_dim
         
 
         State { graph, cliques, which_cliques, flag_count, flag_count_min, flag_count_max, edge_neighborhoods}
