@@ -1,6 +1,12 @@
 #include "flagser.hpp"
 
-#define main no_dont_name_this_main
+
+
+// int  main(argc, argv) { ..... }
+// will turned into
+// int no_dont_name_this_main() { return 0; }
+// void still_not_main(argc, argv) { ... }
+#define main no_dont_name_this_main() { return 0; } void still_not_main
 #include "flagser/src/flagser-count.cpp"
 #undef main
 
