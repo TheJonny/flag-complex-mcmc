@@ -2,6 +2,7 @@
 use directed_scm::*;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256StarStar;
+use std::fs;
 
 use clap::Parser;
 
@@ -37,16 +38,26 @@ struct Args{
     /// continue: look for a serde file and continue from there
     #[clap(short, long, default_value = "")]
     continue_from: String,
+
+    /// samples_store_dir: directory where to store hdf5 files with samples
+    #[clap(long, default_value = "./samples/")]
+    samples_store_dir: String,
+
+    /// state_store_dir: directory where to store hdf5 files with samples
+    #[clap(long, default_value = "./state/")]
+    state_store_dir: String,
 }
 
 fn main() {
     let args = Args::parse();
+    fs::create_dir_all(&args.state_store_dir).expect("could not create state storage directory");
+    fs::create_dir_all(&args.samples_store_dir).expect("could not create samples storage directory");
     
     let (sample_index_start, mut sampler) = if !args.continue_from.is_empty() {
         io::load_state(&args.continue_from).expect("unable to load state")
     } else {
         let g = io::read_flag_file(&args.input);
-        io::new_hdf_file(&args.label, args.seed).unwrap();
+        io::new_hdf_file(&args.samples_store_dir, &args.label, args.seed).unwrap();
         let st = State::new(g);
         println!("we have the following number of maximal k-cliques {:?}", st.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
         let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
@@ -58,7 +69,7 @@ fn main() {
     let sample_index_end = sample_index_start + args.number_of_samples;
     for i in sample_index_start..sample_index_end {
         let s = sampler.next();
-        io::save_to_hdf(&args.label, args.seed, i, &s.graph, &s.flag_count).unwrap();
+        io::save_to_hdf(&args.samples_store_dir, &args.label, args.seed, i, &s.graph, &s.flag_count).unwrap();
 
         println!("flag count: {:?}", s.flag_count);
         drop(s);
@@ -66,6 +77,6 @@ fn main() {
     }
     //println!("whole graph flag count: {:?}", &sampler.state.graph.flagser_count());
 
-    io::save_state(&format!("sampler-{l}-{s:03}.state", l=args.label, s=args.seed), sample_index_end, sampler).unwrap();
+    io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), sample_index_end, sampler).unwrap();
 }
 
