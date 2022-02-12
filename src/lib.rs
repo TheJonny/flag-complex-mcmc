@@ -8,6 +8,8 @@ use serde::{Serialize, Deserialize};
 
 use rayon::prelude::*;
 
+use crate::util::{all_le, intersect_sorted, random_perm, vec_intersect, vec_setminus};
+
 pub mod io;
 
 mod util;
@@ -131,18 +133,6 @@ impl State {
         affected_vertices.dedup();
         return affected_vertices;
     }
-}
-
-fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
-    let maxlen = std::cmp::max(a.len(), b.len());
-    let left = a.iter().chain(std::iter::repeat(z));
-    let right = b.iter().chain(std::iter::repeat(z));
-    for (l,r) in left.zip(right).take(maxlen) {
-        if l > r {
-            return false;
-        }
-    }
-    return true;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -336,7 +326,7 @@ fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
     undirected_edges.par_iter().map(|&[a, b]| {
         assert!(a > b);
 
-        let mut l = crate::util::intersect_sorted(&undirected_adj_lists[a as usize], &undirected_adj_lists[b as usize]);
+        let mut l = intersect_sorted(&undirected_adj_lists[a as usize], &undirected_adj_lists[b as usize]);
         l.shrink_to_fit();
         ([a,b], l)
     }).collect_into_vec(&mut respairs);
@@ -385,28 +375,3 @@ fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
 
     return (edge_neighborhood, max_by_dim);
 }
-
-pub fn random_perm<R: Rng>(l: usize, h:usize, rng: &mut R) -> Vec<usize> {
-    let mut perm : Vec<usize> = (l..h).collect();
-    perm.shuffle(rng);
-    return perm;
-}
-
-pub fn vec_intersect(xs: &Vec<Node>, ys: &Vec<Node>) -> Vec<Node> {
-    // assumes uniqueness
-    let mut r = vec![];
-    for x in xs {
-        if ys.contains(&x) {
-            r.push(x.clone());
-        }
-    }
-    return r;
-}
-
-pub fn vec_setminus(xs: &Vec<Node>, ys: &Vec<Node>) -> Vec<Node> {
-    // xs - ys: return vec contains xs minus the elements in ys
-    let mut r = xs.clone();
-    r.retain(|x| !ys.contains(x));
-    return r;
-}
-

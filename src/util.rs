@@ -1,3 +1,6 @@
+use crate::Node;
+use rand::Rng;
+use rand::prelude::SliceRandom;
 
 pub fn intersect_sorted<T: std::cmp::Ord + Clone>(a: &[T], b: &[T]) -> Vec<T> {
     let mut out = vec![];
@@ -21,6 +24,44 @@ pub fn intersect_sorted<T: std::cmp::Ord + Clone>(a: &[T], b: &[T]) -> Vec<T> {
     }
     return out;
 }
+
+pub fn random_perm<R: Rng>(l: usize, h:usize, rng: &mut R) -> Vec<usize> {
+    let mut perm : Vec<usize> = (l..h).collect();
+    perm.shuffle(rng);
+    return perm;
+}
+
+pub fn vec_intersect(xs: &Vec<Node>, ys: &Vec<Node>) -> Vec<Node> {
+    // assumes uniqueness
+    let mut r = vec![];
+    for x in xs {
+        if ys.contains(&x) {
+            r.push(x.clone());
+        }
+    }
+    return r;
+}
+
+pub fn vec_setminus(xs: &Vec<Node>, ys: &Vec<Node>) -> Vec<Node> {
+    // xs - ys: return vec contains xs minus the elements in ys
+    let mut r = xs.clone();
+    r.retain(|x| !ys.contains(x));
+    return r;
+}
+
+pub fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
+    let maxlen = std::cmp::max(a.len(), b.len());
+    let left = a.iter().chain(std::iter::repeat(z));
+    let right = b.iter().chain(std::iter::repeat(z));
+    for (l,r) in left.zip(right).take(maxlen) {
+        if l > r {
+            return false;
+        }
+    }
+    return true;
+}
+
+
 
 #[test]
 fn test_intersect() {
