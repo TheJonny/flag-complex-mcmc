@@ -1,5 +1,5 @@
 use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use rand;
 use rand::distributions::WeightedIndex;
@@ -30,7 +30,6 @@ pub struct EdgeInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct State {
-    pub cliques: Vec<Vec<Node>>,
     pub cliques_by_order: Vec<Vec<Vec<Node>>>,
     pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
     pub graph: Graph,
@@ -70,7 +69,7 @@ impl State {
         // TODO: flag_count_max/min abhängig von max_by_dim
         
 
-        State { graph, cliques, cliques_by_order, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
+        State { graph, cliques_by_order, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
     }
 
     /// applies transition, returns the change in simplex counts
@@ -201,16 +200,15 @@ impl Transition {
         return random_move(state, rng);
     }
 
-    
-    /// new.has_edge(s[i], s[j]) <-> old.has_edge(i,j)
-    pub fn new_clique_shuffling(state: &State, cid: CliqueId, perm: &[usize]) -> Self{
-        let cl = &state.cliques[cid as usize];
+    pub fn clique_permute<R: Rng>(state: &State, rng: &mut R) -> Self {
+        let dist_on_clique_order = WeightedIndex::new(state.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>()).unwrap();
+        let cliques_of_fixed_order = &state.cliques_by_order[dist_on_clique_order.sample(rng)];
+        let cl = cliques_of_fixed_order.choose(rng).unwrap();
 
-        // set new edge directions:
-        // create a new subgraph adjacency matrix as hashmap and then apply it to self.
+        let perm = random_perm(0,cl.len(), rng);
+
         let mut change_edges = vec![];
 
-        // prepare new adjacency matrix...
         for i in 0 .. cl.len() {
             for j in 0 .. cl.len() {
                 let pre = state.graph.has_edge(cl[perm[i]], cl[perm[j]]);
@@ -220,21 +218,12 @@ impl Transition {
                 }
             }
         }
-        return Transition{change_edges};
-    }
-    pub fn clique_permute<R: Rng>(state: &State, rng: &mut R) -> Self {
-        let cid = rng.gen_range(0..state.cliques.len() as CliqueId);
-        let n = state.cliques[cid].len();
-        let mut perm = (0..n).collect::<Vec<usize>>();
-        perm.shuffle(rng);
-        return Transition::new_clique_shuffling(state, cid, &perm);
+        return Transition {change_edges};
     }
 
     pub fn clique_swap<R: Rng>(state: &State, rng: &mut R) -> Self {
         let dist_on_clique_order = WeightedIndex::new(state.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>()).unwrap();
         let cliques_of_fixed_order = &state.cliques_by_order[dist_on_clique_order.sample(rng)];
-        //let m1 = HashSet::from_iter(cliques_of_fixed_order.choose(rng).unwrap().iter());
-        //let m2 = HashSet::from_iter(cliques_of_fixed_order.choose(rng).unwrap().iter());
         let m1 = cliques_of_fixed_order.choose(rng).unwrap();
         let m2 = cliques_of_fixed_order.choose(rng).unwrap();
         
@@ -245,17 +234,12 @@ impl Transition {
         let n_d = d.len();
         let n_a = m1.len() - n_c;
         
-        //println!("m1, m2 are:{:?}, thus c,d are: {:?}", (&m1,&m2), (&c,&d));
-        //dbg!((n_c, n_d, n_a));
-        
-        //let perm_c = perm(0, n_c, rng);   //with perm on c
-        let perm_c = (0..n_c).collect::<Vec<usize>>();
-        let perm_a = perm(n_c, n_c+n_a, rng);
-        let perm_b = perm(n_c+n_a, n_d, rng);
+        //let perm_c = (0..n_c).collect::<Vec<usize>>();    //uncomment to not permute common vertices
+        let perm_c = random_perm(0, n_c, rng);   //with perm on c
+        let perm_a = random_perm(n_c, n_c+n_a, rng);
+        let perm_b = random_perm(n_c+n_a, n_d, rng);
 
         let perm_d = {let mut x = perm_c.clone(); x.extend(&perm_b); x.extend(&perm_a); x};
-        //dbg!(&d);
-        //dbg!(&perm_d);
 
         //TODO VIEEEEEL SCHÖNER
         let mut new_edges = Vec::<Edge>::new();
@@ -402,16 +386,7 @@ fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
     return (edge_neighborhood, max_by_dim);
 }
 
-// TODO: Move to some utils slot or replace by choosing a crate with inverse
-pub fn inverse_permutation(perm: &Vec<usize>) -> Vec<usize> {
-    let mut inv_perm = perm.clone();
-    for i in 0..perm.len() {
-        inv_perm[perm[i]] = i;
-    }
-    return inv_perm;
-}
-
-pub fn perm<R: Rng>(l: usize, h:usize, rng: &mut R) -> Vec<usize> {
+pub fn random_perm<R: Rng>(l: usize, h:usize, rng: &mut R) -> Vec<usize> {
     let mut perm : Vec<usize> = (l..h).collect();
     perm.shuffle(rng);
     return perm;

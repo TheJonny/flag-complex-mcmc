@@ -6,11 +6,9 @@ pub type Edge = [Node; 2];
 //use rand::Rng;
 //use rand::{Rng, prelude::SliceRandom};
 use rand::prelude::*;
-use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 
 use indexmap::set::IndexSet;
-use std::collections::HashMap;
 
 use std::cmp::{min, max};
 
