@@ -22,6 +22,7 @@ type Graph = EdgeMapGraph;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct State {
+    pub cliques: Vec<Vec<Node>>,
     pub cliques_by_order: Vec<Vec<Vec<Node>>>,
     pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
     pub graph: Graph,
@@ -35,7 +36,7 @@ impl State {
         println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
         let mut cliques_by_order = vec![];
-        for c in cliques {
+        for c in cliques.clone() {
             let clique_order = c.len();
             if clique_order > cliques_by_order.len() {
                 cliques_by_order.resize(clique_order, vec![]);
@@ -46,7 +47,7 @@ impl State {
         let flag_count = graph.flagser_count();
         //let flag_count = flag_complex::count_cells(&graph);
         //assert_eq!(flag_count, flag_count2);
-        let bandwidth = 1.10;
+        let bandwidth = 1.25;
         let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| (*x as f64 * bandwidth + 10.) as usize).collect();
         flag_count_max.push(2); // some higher dimensional simplices should be ok
         let flag_count_min: Vec<_> = flag_count.iter().map(|x| (*x as f64 / bandwidth - 10.) as usize).collect();
@@ -57,7 +58,7 @@ impl State {
 
         let graph = Graph::copy(&graph);
 
-        State { graph, cliques_by_order, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
+        State { graph, cliques, cliques_by_order, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
     }
 
     /// applies transition, returns the change in simplex counts
@@ -185,13 +186,13 @@ pub struct Transition {
 impl Transition {
     pub fn random_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>) -> Self {
         let potential_moves = [Transition::single_edge_flip, Transition::double_edge_move,
-                                //Transition::clique_permute,
+                                Transition::clique_permute,
                                 Transition::clique_swap];
         let random_move = potential_moves[move_distribution.sample(rng)];
         return random_move(state, rng);
     }
 
-    /*
+    
     /// new.has_edge(s[i], s[j]) <-> old.has_edge(i,j)
     pub fn new_clique_shuffling(state: &State, cid: CliqueId, perm: &[usize]) -> Self{
         let cl = &state.cliques[cid as usize];
@@ -219,8 +220,6 @@ impl Transition {
         perm.shuffle(rng);
         return Transition::new_clique_shuffling(state, cid, &perm);
     }
-    */
-    
 
     pub fn clique_swap<R: Rng>(state: &State, rng: &mut R) -> Self {
         let dist_on_clique_order = WeightedIndex::new(state.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>()).unwrap();

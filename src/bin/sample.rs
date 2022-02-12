@@ -50,7 +50,7 @@ fn main() {
         let st = State::new(g);
         println!("we have the following number of maximal k-cliques {:?}", st.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
         let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
-        let move_distribution = rand::distributions::WeightedIndex::new([0.1, 0.1, 0.8]).unwrap();
+        let move_distribution = rand::distributions::WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
         let mut sampler = MCMCSampler{state: st, move_distribution, burn_in: args.burn_in, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
         sampler.burn_in();
         (0, sampler)
