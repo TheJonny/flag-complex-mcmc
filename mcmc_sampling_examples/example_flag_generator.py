@@ -53,6 +53,11 @@ if __name__ == '__main__':
 
     ex_09 = bbp(0)
 
+    ex_10 = densifier(
+                [0, 0, 0, 0, 1, 1, 3, 3, 3, 4, 4, 5],
+                [1, 2, 3, 4, 2, 5, 2, 4, 5, 1, 5, 2]
+            )
+
     ex_20 = random_with_p(100,0.05)     #A
     ex_21 = random_with_p(1000,0.05)    #B
     ex_22 = random_with_p(10000,0.05)   #C
@@ -65,6 +70,7 @@ if __name__ == '__main__':
             ex_04, ex_05, ex_06,
             ex_07,
             ex_08, ex_09,
+            ex_10,
             ex_20, ex_21, ex_22, ex_23, ex_24, 
             ]
 

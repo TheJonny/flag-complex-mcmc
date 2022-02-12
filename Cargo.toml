@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+array_tool = "*"
 libc = "*"
-rand = "*"
+rand = { version = "*", features = ["serde1"] }
 clap = { version = "3.0.8", features = ["derive"] }
 rayon = "*"
 indexmap = {version = "*", features = ["serde"] }
