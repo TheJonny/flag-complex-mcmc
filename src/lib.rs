@@ -55,16 +55,23 @@ impl State {
         }
         println!("initial flagser");
         let flag_count = graph.flagser_count();
-        //let flag_count = flag_complex::count_cells(&graph);
-        //assert_eq!(flag_count, flag_count2);
-        let bandwidth = 1.25;
-        let mut flag_count_max: Vec<_> = flag_count.iter().map(|x| (*x as f64 * bandwidth + 10.) as usize).collect();
-        flag_count_max.push(2); // some higher dimensional simplices should be ok
-        let flag_count_min: Vec<_> = flag_count.iter().map(|x| (*x as f64 / bandwidth - 10.) as usize).collect();
-        println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
+        let relax_de = crate::util::calc_relax_de(&flag_count);
 
         println!("computing edge neighborhoods");
         let (edge_neighborhood, max_by_dim) = compute_edge_infos(&graph);
+        dbg!(&max_by_dim);
+        
+        let additional_relax = 1.05; 
+        let mut flag_count_max: Vec<usize> = vec![];
+        let mut flag_count_min: Vec<usize> = vec![];
+        for d in 0..flag_count.len() {
+            let relax : usize = (std::cmp::max(max_by_dim[d]*3, relax_de[d]))/2;
+            flag_count_max.push(((flag_count[d] + relax) as f64 * additional_relax) as usize);
+            flag_count_min.push(((flag_count[d] - relax) as f64 / additional_relax) as usize);
+        }
+        println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
+
+
         let nchange_dims = max_by_dim.len().checked_sub(2).expect("there should be at least one edge!");
 
         //for (m, f) in zip_longest(max_by_dim.iter(), 
@@ -92,7 +99,6 @@ impl State {
         for (p,s) in post.iter().zip(self.flag_count.iter_mut()) {
             *s += *p;
         }
-
         return (pre, post);
     }
 
@@ -100,12 +106,10 @@ impl State {
         for &([a,b],add) in &t.change_edges {
             self.graph.set_edge(a, b, !add);
         }
-
         for (p,s) in post.iter().zip(self.flag_count.iter_mut()) {
             assert!(*s >= *p);
             *s -= *p;
         }
-
         if pre.len() > self.flag_count.len() {
             self.flag_count.resize(pre.len(), 0);
         }

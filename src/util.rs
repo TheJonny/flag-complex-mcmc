@@ -49,6 +49,8 @@ pub fn vec_setminus(xs: &Vec<Node>, ys: &Vec<Node>) -> Vec<Node> {
     return r;
 }
 
+// pub fn vec_max() {}
+
 pub fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
     let maxlen = std::cmp::max(a.len(), b.len());
     let left = a.iter().chain(std::iter::repeat(z));
@@ -61,6 +63,37 @@ pub fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
     return true;
 }
 
+pub fn factorial(x: usize) -> usize {
+    let mut res = 1 as usize;
+    for i in 1..x {
+        res *= i;
+    }
+    return res;
+}
+
+pub fn calc_relax_de(sc: &Vec<usize>) -> Vec<usize> {
+    let mut relax_de = vec![];
+    for d in 0..sc.len() {
+        let mut ind = 1;
+        let mut simplices_lost = vec![];
+        while OEIS_A058298[ind] < sc[d] {
+            simplices_lost.push(OEIS_A058298[ind] - OEIS_A058298[ind-1]);
+            ind += 1;
+        }
+        let relax_de_a = simplices_lost.iter().max().unwrap();
+        let relax_de_b = factorial(d+1);
+        relax_de.push(std::cmp::min(*relax_de_a, relax_de_b));
+    }
+    return relax_de;
+}
+
+// OEIS: A058298, see https://oeis.org/A058298
+// This describes the maximum number of simplices achieved by having 1.. double edges in a clique.
+// Other description: 	Triangle n!/(n-k), 1 <= k < n, read by rows. 
+const OEIS_A058298 : [usize;40] = [2,3,6,8,12,24,30,40,60,120,144,180,240,360,720,
+ 840,1008,1260,1680,2520,5040,5760,6720,8064,10080,
+ 13440,20160,40320,45360,51840,60480,72576,90720,
+ 120960,181440,362880,403200,453600,518400,604800];
 
 
 #[test]
