@@ -74,9 +74,13 @@ fn main() {
         println!("flag count: {:?}", s.flag_count);
         drop(s);
         dbg!(sampler.acceptance_ratio());
+        if (i % 1000) == 0 {
+            println!("saving state in step {i}");
+            io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), i, &sampler).unwrap();
+        }
     }
     //println!("whole graph flag count: {:?}", &sampler.state.graph.flagser_count());
 
-    io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), sample_index_end, sampler).unwrap();
+    io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), sample_index_end, &sampler).unwrap();
 }
 
