@@ -35,7 +35,9 @@ pub fn save_flag_file<G: DirectedGraph>(fname:&str, graph:&G) -> std::io::Result
     let mut content = "dim 0:\n".to_string();
     content += &("1 ".repeat(graph.nnodes()).trim_end().to_owned() + "\n"); // add vertices
     content += "dim 1:\n";
-    for [i,j] in graph.edges() {
+    let mut edges = graph.edges();
+    edges.sort_unstable();
+    for [i,j] in edges {
         content += &(format!("{} {} 1\n", i, j));
     }
     std::fs::write(fname, content).expect("Unable to write file");
@@ -62,7 +64,9 @@ pub fn save_to_hdf<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64,
     let file = hdf5::File::open_rw(format!("{state_store_dir}/{label}-{seed:03}.hdf5"))?;
     let group = file.create_group(&format!("/{seed:03}/{sample_number:06}"))?;
     let builder = group.new_dataset_builder();
-    let ds = builder.deflate(4).with_data(&ndarray::arr2(&graph.edges())).create("edgelist")?;
+    let mut edges = graph.edges();
+    edges.sort_unstable();
+    let ds = builder.deflate(4).with_data(&ndarray::arr2(&edges)).create("edgelist")?;
     ds.new_attr::<usize>().shape(flag_count.len()).create("flag_count")?.write(flag_count)?;
     ds.new_attr::<usize>().shape(1).create("number_of_vertices")?.write(&[graph.nnodes()])?;
     Ok(())
