@@ -70,7 +70,7 @@ impl State {
             flag_count_max.push(((flag_count[d] + relax) as f64 * additional_relax) as usize);
             flag_count_min.push(((flag_count[d] - relax) as f64 / additional_relax) as usize);
         }
-        flag_count_max.push(10)
+        //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
 
 
