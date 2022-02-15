@@ -68,16 +68,16 @@ fn main() {
     };
     let sample_index_end = sample_index_start + args.number_of_samples;
     for i in sample_index_start..sample_index_end {
+        if (i % 1000) == 0 {
+            println!("saving state in step {i}");
+            io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), i, &sampler).unwrap();
+        }
         let s = sampler.next();
         io::save_to_hdf(&args.samples_store_dir, &args.label, args.seed, i, &s.graph, &s.flag_count).unwrap();
 
         println!("flag count: {:?}", s.flag_count);
         drop(s);
         dbg!(sampler.acceptance_ratio());
-        if (i % 1000) == 0 {
-            println!("saving state in step {i}");
-            io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), i, &sampler).unwrap();
-        }
     }
     //println!("whole graph flag count: {:?}", &sampler.state.graph.flagser_count());
 

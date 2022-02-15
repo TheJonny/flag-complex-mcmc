@@ -56,6 +56,7 @@ impl State {
         println!("initial flagser");
         let flag_count = graph.flagser_count();
         let relax_de = crate::util::calc_relax_de(&flag_count);
+        dbg!(&relax_de);
 
         println!("computing edge neighborhoods");
         let (edge_neighborhood, max_by_dim) = compute_edge_infos(&graph);
@@ -69,6 +70,7 @@ impl State {
             flag_count_max.push(((flag_count[d] + relax) as f64 * additional_relax) as usize);
             flag_count_min.push(((flag_count[d] - relax) as f64 / additional_relax) as usize);
         }
+        flag_count_max.push(10)
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
 
 
