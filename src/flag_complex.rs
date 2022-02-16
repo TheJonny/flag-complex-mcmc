@@ -1,7 +1,9 @@
 use crate::graph::*;
 use rayon::prelude::*;
 
-// translated from flagser/include/complex/directed_flag_complex.h
+// This is a translation of parts from the "flagser" C++ code of Daniel Lütgehetmann.
+// Published as "Computing Persistent Homology of Directed Flag Complexes" https://doi.org/10.3390/a13010019
+// https://github.com/luetge/flagser/blob/master/include/complex/directed_flag_complex.h
 
 pub fn for_each_cell_par<'a, G: DirectedGraph+Sync+?Sized, R, F>
     (graph: &'a G, f: F, min_dimension: usize, max_dimension: usize) -> impl ParallelIterator<Item=R> + 'a
