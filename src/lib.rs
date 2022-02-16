@@ -146,7 +146,6 @@ pub struct MCMCSampler<R: Rng> {
     pub state: State,
     pub move_distribution: WeightedIndex<f64>,
     pub clique_order_distribution: WeightedIndex<f64>,
-    pub burn_in: usize,
     pub sample_distance: usize,
     pub sampled: usize,
     pub accepted: usize,
@@ -154,16 +153,6 @@ pub struct MCMCSampler<R: Rng> {
 }
 
 impl<R: Rng> MCMCSampler<R> {
-    pub fn burn_in(&mut self) {
-        while self.burn_in > 0 {
-            self.burn_in -= 1;
-            let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution, &self.clique_order_distribution);
-            let counters = self.state.apply_transition(&t);
-            if ! self.state.valid() {
-                self.state.revert_transition(&t, &counters);
-            }
-        }
-    }
     pub fn next(&mut self) -> &State{
         for _ in 0..self.sample_distance {
             let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution, &self.clique_order_distribution);

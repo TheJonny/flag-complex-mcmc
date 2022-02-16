@@ -28,10 +28,6 @@ struct Args{
     #[clap(short, long, default_value_t = 1000)]
     number_of_samples: usize,
 
-    /// burn_in: number of steps to burn in MCMC sampler
-    #[clap(long, default_value_t = 5000)]
-    burn_in: usize,
-
     /// sample_distance: number of steps between too samples
     #[clap(long, default_value_t = 4000)]
     sample_distance: usize,
@@ -70,8 +66,7 @@ fn main() {
         let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
         dbg!(&adjusted_clique_order);
         let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
-        let mut sampler = MCMCSampler{state: st, move_distribution, clique_order_distribution, burn_in: args.burn_in, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
-        sampler.burn_in();
+        let mut sampler = MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
         (0, sampler)
     };
     let sample_index_end = sample_index_start + args.number_of_samples;
