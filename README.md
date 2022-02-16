@@ -22,6 +22,10 @@ for other features, call
 
 ### Roadmap:
 - Fix Doku.
+- Add proper citations
 
 
+### Citations:
+- In early versions we heavily depended on `flagser_count`: https://github.com/luetge/flagser, but we implemented the algorithm and datastructures natively in `rust`. Anyway, they deserve credit.
+- The `example_flag_generator.py` downloads data from https://github.com/lrvarshney/elegans (see https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1001066)
 
