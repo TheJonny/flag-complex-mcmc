@@ -17,8 +17,6 @@ mod util;
 pub mod graph;
 use graph::*;
 
-mod flagser;
-
 pub mod flag_complex;
 
 type Graph = EdgeMapGraph;
