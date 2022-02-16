@@ -66,8 +66,8 @@ impl State {
         let mut flag_count_max: Vec<usize> = vec![];
         let mut flag_count_min: Vec<usize> = vec![];
         for d in 0..flag_count.len() {
-            let relax : usize = (std::cmp::max(max_by_dim[d]*3, relax_de[d]))/2;
-            flag_count_max.push(((flag_count[d] + relax) as f64 * additional_relax) as usize);
+            let relax : usize = (std::cmp::max(max_by_dim[d]*2, relax_de[d]))/2;
+            flag_count_max.push(((flag_count[d] + 2*relax) as f64 * additional_relax) as usize);
             flag_count_min.push(((flag_count[d] - relax) as f64 / additional_relax) as usize);
         }
         //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
@@ -145,6 +145,7 @@ impl State {
 pub struct MCMCSampler<R: Rng> {
     pub state: State,
     pub move_distribution: WeightedIndex<f64>,
+    pub clique_order_distribution: WeightedIndex<f64>,
     pub burn_in: usize,
     pub sample_distance: usize,
     pub sampled: usize,
@@ -156,7 +157,7 @@ impl<R: Rng> MCMCSampler<R> {
     pub fn burn_in(&mut self) {
         while self.burn_in > 0 {
             self.burn_in -= 1;
-            let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution);
+            let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution, &self.clique_order_distribution);
             let counters = self.state.apply_transition(&t);
             if ! self.state.valid() {
                 self.state.revert_transition(&t, &counters);
@@ -165,7 +166,7 @@ impl<R: Rng> MCMCSampler<R> {
     }
     pub fn next(&mut self) -> &State{
         for _ in 0..self.sample_distance {
-            let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution);
+            let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution, &self.clique_order_distribution);
             let counters = self.state.apply_transition(&t);
             self.sampled += 1;
             if self.state.valid() {
@@ -189,16 +190,15 @@ pub struct Transition {
 }
 
 impl Transition {
-    pub fn random_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>) -> Self {
+    pub fn random_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>, clique_order_distribution: &WeightedIndex<f64>) -> Self {
         let potential_moves = [Transition::single_edge_flip, Transition::double_edge_move,
                                 Transition::clique_permute, Transition::clique_swap];
         let random_move = potential_moves[move_distribution.sample(rng)];
-        return random_move(state, rng);
+        return random_move(state, rng, clique_order_distribution);
     }
 
-    pub fn clique_permute<R: Rng>(state: &State, rng: &mut R) -> Self {
-        let dist_on_clique_order = WeightedIndex::new(state.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>()).unwrap();
-        let cliques_of_fixed_order = &state.cliques_by_order[dist_on_clique_order.sample(rng)];
+    pub fn clique_permute<R: Rng>(state: &State, rng: &mut R, clique_order_distribution: &WeightedIndex<f64>) -> Self {
+        let cliques_of_fixed_order = &state.cliques_by_order[clique_order_distribution.sample(rng)];
         let cl = cliques_of_fixed_order.choose(rng).unwrap();
 
         let perm = random_perm(0,cl.len(), rng);
@@ -217,9 +217,8 @@ impl Transition {
         return Transition {change_edges};
     }
 
-    pub fn clique_swap<R: Rng>(state: &State, rng: &mut R) -> Self {
-        let dist_on_clique_order = WeightedIndex::new(state.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>()).unwrap();
-        let cliques_of_fixed_order = &state.cliques_by_order[dist_on_clique_order.sample(rng)];
+    pub fn clique_swap<R: Rng>(state: &State, rng: &mut R, clique_order_distribution: &WeightedIndex<f64>) -> Self {
+        let cliques_of_fixed_order = &state.cliques_by_order[clique_order_distribution.sample(rng)];
         let m1 = cliques_of_fixed_order.choose(rng).unwrap();
         let m2 = cliques_of_fixed_order.choose(rng).unwrap();
         
@@ -276,7 +275,7 @@ impl Transition {
         return Transition{change_edges};
     }
 
-    pub fn single_edge_flip<R: Rng>(state: &State, rng: &mut R) -> Self {
+    pub fn single_edge_flip<R: Rng>(state: &State, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
         if let Some([from, to]) = state.graph.sample_edge(rng) {
             if !state.graph.has_edge(to, from) { // its a single edge
                 return Transition{change_edges: vec![([from,to], false), ([to,from], true)]};
@@ -285,7 +284,7 @@ impl Transition {
         return Transition{change_edges: vec![]};
     }
     
-    pub fn double_edge_move<R: Rng>(state: &State, rng: &mut R) -> Self {
+    pub fn double_edge_move<R: Rng>(state: &State, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
         // if there is no edge, return an empty transition below
         if let Some(double_edge) = state.graph.sample_double_edge(rng) {
             // FIXME: assert somewhere, that there are single edges.

@@ -2,6 +2,7 @@
 use directed_scm::*;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256StarStar;
+use rand::distributions::WeightedIndex;
 use std::fs;
 
 use clap::Parser;
@@ -43,9 +44,13 @@ struct Args{
     #[clap(long, default_value = "./samples/")]
     samples_store_dir: String,
 
-    /// state_store_dir: directory where to store hdf5 files with samples
+    /// state_store_dir: directory where to store saved states
     #[clap(long, default_value = "./state/")]
     state_store_dir: String,
+
+    /// state_save_interval: Interval in which to save states
+    #[clap(long, default_value_t = 100)]
+    state_save_interval: usize,
 }
 
 fn main() {
@@ -61,14 +66,17 @@ fn main() {
         let st = State::new(g);
         println!("we have the following number of maximal k-cliques {:?}", st.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
         let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
-        let move_distribution = rand::distributions::WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
-        let mut sampler = MCMCSampler{state: st, move_distribution, burn_in: args.burn_in, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
+        let move_distribution = WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
+        let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
+        dbg!(&adjusted_clique_order);
+        let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
+        let mut sampler = MCMCSampler{state: st, move_distribution, clique_order_distribution, burn_in: args.burn_in, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
         sampler.burn_in();
         (0, sampler)
     };
     let sample_index_end = sample_index_start + args.number_of_samples;
     for i in sample_index_start..sample_index_end {
-        if (i % 1000) == 0 {
+        if (i % args.state_save_interval) == 0 {
             println!("saving state in step {i}");
             io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), i, &sampler).unwrap();
         }
