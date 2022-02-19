@@ -63,7 +63,8 @@ fn main() {
         println!("we have the following number of maximal k-cliques {:?}", st.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
         let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
         let move_distribution = WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
-        let clique_order_weights =st.clique_weights_by_order.iter().map(|cs| cs.iter().sum()).collect::<Vec<f64>>();
+        //let clique_order_weights = st.clique_weights_by_order.iter().map(|cs| cs.iter().sum()).collect::<Vec<f64>>();
+        let clique_order_weights = st.clique_weights_by_order.iter().map(|cs| (cs.iter().sum::<f64>()).powf(0.5)).collect::<Vec<f64>>();
         dbg!(&clique_order_weights);
         let clique_order_distribution = WeightedIndex::new(clique_order_weights).unwrap();
         let clique_distribution_by_order: Vec<WeightedIndex<f64>>= (0..st.cliques_by_order.len()).map(|d| WeightedIndex::new(st.clique_weights_by_order[d].clone()).or(WeightedIndex::new(vec![1.])).unwrap()).collect();
