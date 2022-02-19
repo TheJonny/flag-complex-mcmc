@@ -74,20 +74,22 @@ impl State {
 
         println!("initial flagser");
         let flag_count = graph.flagser_count();
-        let relax_de = crate::util::calc_relax_de(&flag_count);
-        dbg!(&relax_de);
 
         println!("computing edge neighborhoods");
         let (edge_neighborhood, max_by_dim) = compute_edge_infos(&graph);
         dbg!(&max_by_dim);
         
-        let additional_relax = 1.05; 
+        let target_relax = 1.02; 
+        let relax_de_upper = crate::util::calc_relax_de(&flag_count.iter().map(|&scd| ((scd as f64) * target_relax).round() as usize).collect());
+        let relax_de_lower = crate::util::calc_relax_de(&flag_count.iter().map(|&scd| ((scd as f64) / target_relax).round() as usize).collect());
         let mut flag_count_max: Vec<usize> = vec![];
         let mut flag_count_min: Vec<usize> = vec![];
         for d in 0..flag_count.len() {
-            let relax : usize = (std::cmp::max(max_by_dim[d]*2, relax_de[d]))/2;
-            flag_count_max.push(((flag_count[d] + 3*relax) as f64 * additional_relax) as usize);
-            flag_count_min.push(((flag_count[d] - relax) as f64 / additional_relax) as usize);
+            let relax_upper = std::cmp::max(max_by_dim[d]*3, relax_de_upper[d]/2);
+            let relax_lower = std::cmp::max(max_by_dim[d]*0, relax_de_lower[d]/2);
+            println!("absolute relaxation (upper/lower) in dimension {d} is: {relax_upper} {relax_lower}");
+            flag_count_max.push(((flag_count[d] as f64) * target_relax + relax_upper as f64).round() as usize);
+            flag_count_min.push(((flag_count[d] as f64) / target_relax - relax_lower as f64).round() as usize);
         }
         //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
