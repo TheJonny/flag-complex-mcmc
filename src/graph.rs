@@ -173,9 +173,10 @@ pub trait DirectedGraphExt: DirectedGraph {
         //     BronKerbosch1(R ⋃ {v}, P ⋂ N(v), X ⋂ N(v))
         //     P := P \ {v}
         //     X := X ⋃ {v}
-        
         if p.is_empty() && x.is_empty() {
-            res.push(r.clone());
+            let mut max_clique = r.clone();
+            max_clique.sort_unstable();
+            res.push(max_clique);
         }
         for (i,&v) in (0..).zip(&p) {
             let newp = p[i..].iter().cloned().filter(|&u| self.has_edge(u,v) || self.has_edge(v,u)).collect();

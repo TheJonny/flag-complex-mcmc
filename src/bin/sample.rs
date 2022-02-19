@@ -63,10 +63,13 @@ fn main() {
         println!("we have the following number of maximal k-cliques {:?}", st.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
         let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
         let move_distribution = WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
-        let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
-        dbg!(&adjusted_clique_order);
-        let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
-        let mut sampler = MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
+        let clique_order_weights =st.clique_weights_by_order.iter().map(|cs| cs.iter().sum()).collect::<Vec<f64>>();
+        dbg!(&clique_order_weights);
+        let clique_order_distribution = WeightedIndex::new(clique_order_weights).unwrap();
+        let clique_distribution_by_order: Vec<WeightedIndex<f64>>= (0..st.cliques_by_order.len()).map(|d| WeightedIndex::new(st.clique_weights_by_order[d].clone()).or(WeightedIndex::new(vec![1.])).unwrap()).collect();
+
+        let dists = Distributions{moves: move_distribution, clique_orders: clique_order_distribution, cliques_by_order: clique_distribution_by_order};
+        let sampler = MCMCSampler{state: st, dists, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
         (0, sampler)
     };
     let sample_index_end = sample_index_start + args.number_of_samples;

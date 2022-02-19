@@ -53,10 +53,20 @@ if __name__ == '__main__':
 
     ex_09 = bbp(0)
 
+    # smallest example with H_2(G) = 1.
     ex_10 = densifier(
-                [0, 0, 0, 0, 1, 1, 3, 3, 3, 4, 4, 5],
-                [1, 2, 3, 4, 2, 5, 2, 4, 5, 1, 5, 2]
+                [0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4],
+                [1, 2, 3, 5, 2, 3, 4, 4, 5, 4, 5, 5]
             )
+
+    # like ex_10, but only cycles and thus s_2 = 0.
+    # TODO
+    ex_11 = densifier(
+                [0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4],
+                [1, 2, 3, 5, 2, 3, 4, 4, 5, 4, 5, 5]
+            )
+
+    ex_12 = join_graphs(ex_10, simplex(2))
 
     ex_20 = random_with_p(100,0.05)     #A
     ex_21 = random_with_p(1000,0.05)    #B
@@ -70,7 +80,7 @@ if __name__ == '__main__':
             ex_04, ex_05, ex_06,
             ex_07,
             ex_08, ex_09,
-            ex_10,
+            ex_10, ex_11, ex_12,
             ex_20, ex_21, ex_22, ex_23, ex_24, 
             ]
 
