@@ -85,8 +85,10 @@ impl State {
         let mut flag_count_max: Vec<usize> = vec![];
         let mut flag_count_min: Vec<usize> = vec![];
         for d in 0..flag_count.len() {
-            let relax_upper = std::cmp::max(max_by_dim[d]*3, relax_de_upper[d]/2);
-            let relax_lower = std::cmp::max(max_by_dim[d]*0, relax_de_lower[d]/2);
+            #let relax_upper = std::cmp::max(max_by_dim[d]*3, relax_de_upper[d]);
+            #let relax_lower = std::cmp::max(max_by_dim[d]*0, relax_de_lower[d]/8);
+            let relax_upper = 0;
+            let relax_lower = 0;
             println!("absolute relaxation (upper/lower) in dimension {d} is: {relax_upper} {relax_lower}");
             flag_count_max.push(((flag_count[d] as f64) * target_relax + relax_upper as f64).round() as usize);
             flag_count_min.push(((flag_count[d] as f64) / target_relax - relax_lower as f64).round() as usize);
