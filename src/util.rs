@@ -52,6 +52,7 @@ pub fn vec_setminus(xs: &Vec<Node>, ys: &Vec<Node>) -> Vec<Node> {
 // pub fn vec_max() {}
 
 pub fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
+    return true;
     let maxlen = std::cmp::max(a.len(), b.len());
     let left = a.iter().chain(std::iter::repeat(z));
     let right = b.iter().chain(std::iter::repeat(z));
