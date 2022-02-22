@@ -64,12 +64,12 @@ fn main() {
         let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
         let move_distribution = WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
         //let clique_order_weights = st.clique_weights_by_order.iter().map(|cs| cs.iter().sum()).collect::<Vec<f64>>();
-        let clique_order_weights = st.clique_weights_by_order.iter().map(|cs| (cs.iter().sum::<f64>()).powf(0.5)).collect::<Vec<f64>>();
-        dbg!(&clique_order_weights);
-        let clique_order_distribution = WeightedIndex::new(clique_order_weights).unwrap();
-        let clique_distribution_by_order: Vec<WeightedIndex<f64>>= (0..st.max_cliques_by_order.len()).map(|d| WeightedIndex::new(st.clique_weights_by_order[d].clone()).or(WeightedIndex::new(vec![1.])).unwrap()).collect();
+        let max_clique_order_weights = st.max_clique_weights_by_order.iter().map(|cs| (cs.iter().sum::<f64>()).powf(0.5)).collect::<Vec<f64>>();
+        dbg!(&max_clique_order_weights);
+        let max_clique_order_distribution = WeightedIndex::new(max_clique_order_weights).unwrap();
+        let max_clique_distribution_by_order: Vec<WeightedIndex<f64>>= (0..st.max_cliques_by_order.len()).map(|d| WeightedIndex::new(st.max_clique_weights_by_order[d].clone()).or(WeightedIndex::new(vec![1.])).unwrap()).collect();
 
-        let dists = Distributions{moves: move_distribution, clique_orders: clique_order_distribution, max_cliques_by_order: clique_distribution_by_order};
+        let dists = Distributions{moves: move_distribution, max_clique_orders: max_clique_order_distribution, max_cliques_by_order: max_clique_distribution_by_order};
         let sampler = MCMCSampler{state: st, dists, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
         (0, sampler)
     };

@@ -31,7 +31,7 @@ pub struct EdgeInfo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct State {
     pub max_cliques_by_order: Vec<Vec<Vec<Node>>>,
-    pub clique_weights_by_order: Vec<Vec<f64>>,
+    pub max_clique_weights_by_order: Vec<Vec<f64>>,
     pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
     pub graph: Graph,
     pub flag_count: Vec<usize>,
@@ -46,14 +46,14 @@ impl State {
         let max_cliques = graph.compute_maximal_cliques();
         let mut max_cliques_by_order = vec![];
         for c in max_cliques.clone() {
-            let clique_order = c.len();
-            if clique_order > max_cliques_by_order.len() {
-                max_cliques_by_order.resize(clique_order, vec![]);
+            let max_clique_order = c.len();
+            if max_clique_order > max_cliques_by_order.len() {
+                max_cliques_by_order.resize(max_clique_order, vec![]);
             }
-            max_cliques_by_order[clique_order-1].push(c);
+            max_cliques_by_order[max_clique_order-1].push(c);
         }
 
-        println!("calculate clique distribution");
+        println!("calculate max_clique distribution");
         let undirected_edges = compute_undirected_edges(&graph);
         let mut max_cliques_per_edge = std::collections::HashMap::<Edge, Vec<&Vec<Node>>>::with_capacity(undirected_edges.len());
         for c in max_cliques.iter() { 
@@ -63,14 +63,14 @@ impl State {
                }
            }
         }
-        let mut clique_weights = std::collections::HashMap::<&Vec<Node>, f64>::with_capacity(max_cliques.len());
+        let mut max_clique_weights = std::collections::HashMap::<&Vec<Node>, f64>::with_capacity(max_cliques.len());
         for e in undirected_edges {
-            let weight_per_clique = 1./(max_cliques_per_edge[&e].len() as f64);
+            let weight_per_max_clique = 1./(max_cliques_per_edge[&e].len() as f64);
             for c in &max_cliques_per_edge[&e] {
-                *clique_weights.entry(c).or_default() += weight_per_clique;
+                *max_clique_weights.entry(c).or_default() += weight_per_max_clique;
             }
         }
-        let clique_weights_by_order:Vec<Vec<f64>> = (0..max_cliques_by_order.len()).map(|d| max_cliques_by_order[d].iter().map(|c| clique_weights[c]).collect()).collect();
+        let max_clique_weights_by_order:Vec<Vec<f64>> = (0..max_cliques_by_order.len()).map(|d| max_cliques_by_order[d].iter().map(|c| max_clique_weights[c]).collect()).collect();
 
         println!("initial flagser");
         let flag_count = graph.flagser_count();
@@ -99,7 +99,7 @@ impl State {
         //for (m, f) in zip_longest(max_by_dim.iter(), 
         // TODO: flag_count_max/min abhängig von max_by_dim
 
-        State { graph, max_cliques_by_order, clique_weights_by_order, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
+        State { graph, max_cliques_by_order, max_clique_weights_by_order, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
     }
 
     /// applies transition, returns the change in simplex counts
@@ -163,7 +163,7 @@ impl State {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Distributions {
     pub moves: WeightedIndex<f64>,
-    pub clique_orders: WeightedIndex<f64>,
+    pub max_clique_orders: WeightedIndex<f64>,
     pub max_cliques_by_order: Vec<WeightedIndex<f64>>,
 }
 
@@ -212,7 +212,7 @@ impl Transition {
     }
 
     pub fn clique_permute<R: Rng>(state: &State, rng: &mut R, dists: &Distributions) -> Self {
-        let dim = dists.clique_orders.sample(rng);
+        let dim = dists.max_clique_orders.sample(rng);
         let cl = &state.max_cliques_by_order[dim][dists.max_cliques_by_order[dim].sample(rng)];
         let perm = random_perm(0,cl.len(), rng);
 
@@ -231,7 +231,7 @@ impl Transition {
     }
 
     pub fn clique_swap<R: Rng>(state: &State, rng: &mut R, dists: &Distributions) -> Self {
-        let dim = dists.clique_orders.sample(rng);
+        let dim = dists.max_clique_orders.sample(rng);
         let m1 = &state.max_cliques_by_order[dim][dists.max_cliques_by_order[dim].sample(rng)];
         let m2 = &state.max_cliques_by_order[dim][dists.max_cliques_by_order[dim].sample(rng)];
         
