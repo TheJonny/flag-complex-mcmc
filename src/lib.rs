@@ -79,19 +79,26 @@ impl State {
         let (edge_neighborhood, max_by_dim) = compute_edge_infos(&graph);
         dbg!(&max_by_dim);
         
+        println!("compute number of (non-maximal) cliques");
+        let clique_count = compute_normalized_undirected_graph(&graph).flagser_count();
+        dbg!(clique_count);
+
+        //let clique_count = compute_normalized_directed_graph(&graph).flagser_count();
+        //dbg!(clique_count);
+
         let target_relax = 1.02; 
         let relax_de_upper = crate::util::calc_relax_de(&flag_count.iter().map(|&scd| ((scd as f64) * target_relax).round() as usize).collect());
         let relax_de_lower = crate::util::calc_relax_de(&flag_count.iter().map(|&scd| ((scd as f64) / target_relax).round() as usize).collect());
         let mut flag_count_max: Vec<usize> = vec![];
         let mut flag_count_min: Vec<usize> = vec![];
         for d in 0..flag_count.len() {
-            let relax_upper = std::cmp::max(max_by_dim[d]*3, relax_de_upper[d]/2);
-            let relax_lower = std::cmp::max(max_by_dim[d]*0, relax_de_lower[d]/2);
+            let relax_upper = relax_de_upper[d]/2;
+            let relax_lower = relax_de_upper[d]/2;
             println!("absolute relaxation (upper/lower) in dimension {d} is: {relax_upper} {relax_lower}");
             flag_count_max.push(((flag_count[d] as f64) * target_relax + relax_upper as f64).round() as usize);
             flag_count_min.push(((flag_count[d] as f64) / target_relax - relax_lower as f64).round() as usize);
         }
-        //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
+        //flag_count_max.push(clique_count10); TODO: ADD SOMETHING LIKE THIS
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
 
         let nchange_dims = max_by_dim.len().checked_sub(2).expect("there should be at least one edge!");
@@ -321,7 +328,7 @@ impl Transition {
     }
 }
 /// for every edge, this gathers the nodes that are connected to both ends.
-fn compute_undirected_edges(graph: &Graph)-> Vec<Edge> {
+fn compute_undirected_edges(graph: &Graph) -> Vec<Edge> {
     let mut undirected_edges = graph.edges();
     for e in &mut undirected_edges {
         let a = max(e[0], e[1]);
@@ -331,6 +338,26 @@ fn compute_undirected_edges(graph: &Graph)-> Vec<Edge> {
     undirected_edges.sort_unstable();
     undirected_edges.dedup();
     return undirected_edges
+}
+
+fn compute_normalized_undirected_graph(graph: &Graph) -> Graph {
+    let undirected_edges = compute_undirected_edges(&graph);
+    let mut normalized_graph = EdgeMapGraph::new_disconnected(graph.nnodes());
+    for &[a,b] in &undirected_edges {
+        normalized_graph.add_edge(a, b);
+    }
+    return normalized_graph;
+}
+
+fn compute_normalized_directed_graph(graph: &Graph) -> Graph {
+    let edges = {let mut x = graph.edges(); x.sort(); x};
+    let mut normalized_graph = EdgeMapGraph::new_disconnected(graph.nnodes());
+    for &[a,b] in edges.iter() {
+        if a < b {normalized_graph.add_edge(a,b)}
+        else if !normalized_graph.has_edge(a,b) {normalized_graph.add_edge(a,b)}
+        else {normalized_graph.add_edge(b,a);}
+    }
+    return normalized_graph;
 }
 
 fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
@@ -362,13 +389,8 @@ fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
     // to determine the acceptance limits, we need to know, how much damage flipping any single edge
     // can do (in each dimension).
     // therefore we calculate the number of adjacent (not necessarly maximal) cliques...
-
-    let mut normalized_graph = EdgeMapGraph::new_disconnected(graph.nnodes());
-    for &[a,b] in &undirected_edges {
-        normalized_graph.add_edge(a, b);
-    }
-
-    let mut nqliques_by_edge_and_dim = HashMap::<Edge, Vec<usize>>::with_capacity(undirected_edges.len());
+    let normalized_graph = compute_normalized_undirected_graph(&graph);
+    let mut ncliques_by_edge_and_dim = HashMap::<Edge, Vec<usize>>::with_capacity(undirected_edges.len());
 
     let mut count_for_edges = |simplex: &[Node]| {
         let dim = simplex.len() - 1;
@@ -376,7 +398,7 @@ fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
         for (i,&b) in simplex.iter().enumerate() {
             for &a in &simplex[0..i] {
                 assert!(a>b);
-                let by_dim = nqliques_by_edge_and_dim.entry([a,b]).or_insert_with(Vec::new);
+                let by_dim = ncliques_by_edge_and_dim.entry([a,b]).or_insert_with(Vec::new);
                 if by_dim.len() <= dim {
                     by_dim.resize(dim+1, 0);
                 }
@@ -388,7 +410,7 @@ fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
 
     //  ... and compute the maximums by dimension
     let mut max_by_dim = vec![];
-    for by_dim in nqliques_by_edge_and_dim.values() {
+    for by_dim in ncliques_by_edge_and_dim.values() {
         if max_by_dim.len() < by_dim.len() {
             max_by_dim.resize(by_dim.len(), 0);
         }
