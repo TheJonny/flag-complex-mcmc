@@ -83,17 +83,20 @@ impl State {
         let clique_count = compute_normalized_undirected_graph(&graph).flagser_count();
         dbg!(clique_count);
 
-        //let clique_count = compute_normalized_directed_graph(&graph).flagser_count();
-        //dbg!(clique_count);
+        /* currently broken, use test.py instead)
+        let clique_count_normalized_directed = compute_normalized_directed_graph(&graph).flagser_count();
+        dbg!(clique_count_normalized_directed);
+        */
 
-        let target_relax = 1.02; 
+        let target_relax = 1.05; 
         let relax_de_upper = crate::util::calc_relax_de(&flag_count.iter().map(|&scd| ((scd as f64) * target_relax).round() as usize).collect());
         let relax_de_lower = crate::util::calc_relax_de(&flag_count.iter().map(|&scd| ((scd as f64) / target_relax).round() as usize).collect());
         let mut flag_count_max: Vec<usize> = vec![];
         let mut flag_count_min: Vec<usize> = vec![];
         for d in 0..flag_count.len() {
-            let relax_upper = relax_de_upper[d]/2;
-            let relax_lower = relax_de_upper[d]/2;
+            let relax_upper = (((relax_de_upper[d] as f64 - (target_relax-1.) * (flag_count[d] as f64))) / 2.) as usize;
+            let relax_lower = (((relax_de_lower[d] as f64 - (target_relax-1.) * (flag_count[d] as f64))) / 2.) as usize;
+            //let relax_lower = relax_de_lower[d]/2;
             println!("absolute relaxation (upper/lower) in dimension {d} is: {relax_upper} {relax_lower}");
             flag_count_max.push(((flag_count[d] as f64) * target_relax + relax_upper as f64).round() as usize);
             flag_count_min.push(((flag_count[d] as f64) / target_relax - relax_lower as f64).round() as usize);
