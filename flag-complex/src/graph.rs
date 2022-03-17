@@ -1,6 +1,4 @@
 pub type Node = u32;
-pub type CliqueId = usize;
-
 pub type Edge = [Node; 2];
 
 //use rand::Rng;
@@ -142,22 +140,6 @@ pub trait DirectedGraphExt: DirectedGraph {
 }
 
 impl<G: DirectedGraph> DirectedGraphExt for G {}
-
-/// undirected edge pair to index in triangular adjacency matrix
-/// ```
-/// use directed_scm::graph::*;
-/// assert_eq!(edge_id(1, 0), 0);
-/// assert_eq!(edge_id(2, 0), 1);
-/// assert_eq!(edge_id(2, 1), 2);
-/// assert_eq!(edge_id(3, 0), 3);
-/// assert_eq!(edge_id(3, 1), 4);
-/// assert_eq!(edge_id(3, 2), 5);
-/// ```
-pub fn edge_id(a: Node, b: Node) -> usize{
-    assert!(a > b);
-    return (a as usize) * ((a as usize)-1) / 2 + (b as usize);
-    
-}
 
 type Chunk = u64;
 const CHUNK_SIZE: usize = Chunk::BITS as usize;
