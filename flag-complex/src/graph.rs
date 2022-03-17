@@ -12,8 +12,6 @@ use indexmap::set::IndexSet;
 
 use std::cmp::{min, max};
 
-use seahash;
-
 pub trait DirectedGraph: Sync {
     fn has_edge(&self, from: Node, to: Node) -> bool;
     fn add_edge(&mut self, from: Node, to: Node);
@@ -78,62 +76,6 @@ pub trait DirectedGraphNew: DirectedGraph + Sized {
         return n
     }
 }
-
-#[derive(Clone)]
-pub struct BoolMatrixGraph {
-    pub adjmat: Vec<bool>,
-    pub nnodes: usize,
-}
-impl std::fmt::Debug for BoolMatrixGraph{
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        return write!(f, "A graph with {} nodes and the following edges: {:?}", self.nnodes, self.edges());
-    }
-}
-
-impl BoolMatrixGraph {
-    pub fn edge_mut (&mut self, from: Node, to: Node) -> &mut bool{
-        if from as usize >= self.nnodes {
-            panic!("from out of bounds");
-        }
-        if to as usize >= self.nnodes {
-            panic!("to out of bounds");
-        }
-        return &mut self.adjmat[(from as usize) * self.nnodes + (to as usize)];
-    }
-}
-impl DirectedGraphNew for BoolMatrixGraph {
-    fn new_disconnected(nnodes: usize) -> Self{
-        let adjsize = nnodes.checked_mul(nnodes).expect("adjacency matrix size overflows");
-        let adjmat = vec![false; adjsize];
-        return BoolMatrixGraph{adjmat, nnodes};
-    }
-}
-
-impl DirectedGraph for BoolMatrixGraph {
-    fn nnodes(&self) -> usize {
-        return self.nnodes;
-    }
-    fn has_edge(&self, from: Node, to: Node) -> bool{
-        if from as usize >= self.nnodes {
-            panic!("from out of bounds");
-        }
-        if to as usize >= self.nnodes {
-            panic!("to out of bounds");
-        }
-        return self.adjmat[(from as usize) * self.nnodes + (to as usize)];
-    }
-
-    fn add_edge(&mut self, from: Node, to: Node) {
-        *self.edge_mut(from, to) = true;
-    }
-    fn remove_edge(&mut self, from: Node, to: Node) {
-        *self.edge_mut(from, to) = false;
-    }
-    fn set_edge(&mut self, from: Node, to: Node, create: bool) {
-        *self.edge_mut(from, to) = create;
-    }
-}
-
 
 
 pub trait DirectedGraphExt: DirectedGraph {
@@ -220,97 +162,11 @@ pub fn edge_id(a: Node, b: Node) -> usize{
 type Chunk = u64;
 const CHUNK_SIZE: usize = Chunk::BITS as usize;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CompactMatrixGraph {
-    nnodes: usize,
-    row_len: usize,
-    out_matrix: Vec<Chunk>,
-    //out_degrees: Vec<usize>,
-}
-
-impl DirectedGraphNew for CompactMatrixGraph {
-    fn new_disconnected(nnodes: usize) -> Self {
-        // nnodes / Chunk::BITS, rounded up.
-        let row_len = (nnodes + Chunk::BITS as usize - 1) / (Chunk::BITS as usize);
-
-        let matsize = row_len.checked_mul(nnodes).expect("size of adjacency matrix overflows");
-        let out_matrix = vec![0; matsize];
-        //let out_degrees = vec![0; nnodes];
-        CompactMatrixGraph { out_matrix, row_len, nnodes}
-    }
-}
-
-impl DirectedGraph for CompactMatrixGraph {
-    fn nnodes(&self) -> usize {
-        return self.nnodes;
-    }
-    fn has_edge(&self, from: Node, to: Node) -> bool {
-        if from as usize >= self.nnodes {
-            panic!("from out of bounds: {} >= {}", from, self.nnodes);
-        }
-        if to as usize >= self.nnodes {
-            panic!("to out of bounds: {} >= {}", to, self.nnodes);
-        }
-        let toh = to as usize / CHUNK_SIZE;
-        let tol = to as usize % CHUNK_SIZE;
-        let row = from as usize;
-        return self.out_matrix[row * self.row_len + toh] & (1<<tol) != 0;
-    }
-    fn add_edge(&mut self, from: Node, to: Node) {
-        let toh = to as usize / CHUNK_SIZE;
-        let tol = to as usize % CHUNK_SIZE;
-        let row = from as usize;
-        self.out_matrix[row * self.row_len + toh] |= 1<<tol;
-    }
-    fn remove_edge(&mut self, from: Node, to: Node) {
-        let toh = to as usize / CHUNK_SIZE;
-        let tol = to as usize % CHUNK_SIZE;
-        let row = from as usize;
-        self.out_matrix[row * self.row_len + toh] &= !(1<<tol);
-    }
-
-    fn edges(&self) -> Vec<[Node; 2]> {
-        let mut result = vec![];
-        for from in 0 .. self.nnodes {
-            for toh in 0 .. self.row_len {
-                let mut bits = self.out_matrix[from * self.row_len + toh];
-                while bits != 0 {
-                    let b = bits.trailing_zeros();
-                    bits &= !(1<<b);
-                    let to = toh as u32 * Chunk::BITS | b;
-                    result.push([from as Node, to]);
-                }
-            }
-        }
-        result
-    }
-    /// ```
-    /// use directed_scm::graph::*;
-    /// let mut g = CompactMatrixGraph::new_disconnected(5);
-    /// g.add_edge(2, 3);
-    /// assert_eq!(g.edges_from(2), vec![3]);
-    /// ```
-    fn edges_from(&self, from: Node) -> Vec<Node> {
-        let offset = self.row_len * from as usize;
-        let mut result = vec![];
-        for toh in 0 .. self.row_len {
-            let mut bits = self.out_matrix[offset + toh];
-            while bits != 0 {
-                let b = bits.trailing_zeros();
-                bits &= !(1<<b);
-                let to = toh as u32 * Chunk::BITS | b;
-                result.push(to);
-            }
-        }
-        result
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EdgeMapGraph{
     nnodes: usize,
-    edges: IndexSet<Edge, std::hash::BuildHasherDefault<seahash::SeaHasher>>,
-    double_edges: IndexSet<Edge, std::hash::BuildHasherDefault<seahash::SeaHasher>>,
+    edges: IndexSet<Edge>,
+    double_edges: IndexSet<Edge>,
 
     out_matrix: Vec<Chunk>,
     row_len: usize,
@@ -397,6 +253,4 @@ impl EdgeMapGraph {
         return Some(self.double_edges[i]);
     }
 
-    // fn choose_double_edge ->
 }
-

@@ -14,12 +14,10 @@ pub mod io;
 
 mod util;
 
-pub mod graph;
-use graph::*;
+use ::flag_complex::*;
+use ::flag_complex::prelude::*;
 
-pub mod flag_complex;
 
-type Graph = EdgeMapGraph;
 //type Graph = BoolMatrixGraph;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -331,7 +329,7 @@ fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
     // can do (in each dimension).
     // therefore we calculate the number of adjacent (not necessarly maximal) cliques...
 
-    let mut normalized_graph = EdgeMapGraph::new_disconnected(graph.nnodes());
+    let mut normalized_graph = Graph::new_disconnected(graph.nnodes());
     for &[a,b] in &undirected_edges {
         normalized_graph.add_edge(a, b);
     }

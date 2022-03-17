@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::prelude::*;
-use crate::graph::*;
+
+use flag_complex::prelude::*;
 
 use crate::MCMCSampler;
 use rand::Rng;
