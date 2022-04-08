@@ -62,7 +62,7 @@ fn main() {
         let st = State::new(g);
         println!("we have the following number of maximal k-cliques {:?}", st.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
         let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
-        let move_distribution = WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
+        let move_distribution = WeightedIndex::new([1., 0.0, 0.00, 0.0]).unwrap();
         let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
         dbg!(&adjusted_clique_order);
         let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
