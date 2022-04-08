@@ -141,6 +141,7 @@ impl<R: Rng> MCMCSampler<R> {
             self.sampled += 1;
             if self.state.valid() {
                 self.accepted += 1;
+                self.state.flag_count_prev = self.state.flag_count.clone();
             }
             else {
                 self.state.revert_transition(&t, &counters);
