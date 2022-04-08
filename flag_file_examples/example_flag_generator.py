@@ -10,6 +10,19 @@ def join_graphs(a,b):
         [np.zeros(shape=(b.shape[0], a.shape[0])), b]
         ])
 
+def seoify(g):
+    '''Perform SearchEngineOptimization on the graph g by turning all double edges to single edges'''
+    (N,N) = g.shape
+    for i in range(N):
+        for j in range(N):
+            if g[i,j] == 1 and g[j,i] == 1:
+                if np.random.uniform() < 0.5:
+                    g[i,j] = 0
+                else:
+                    g[j,i] = 0
+    return g
+
+
 def save_unweighted_flag(fname, graph):
     assert(graph.shape[0] == graph.shape[1])
     N = graph.shape[0]
@@ -53,10 +66,20 @@ if __name__ == '__main__':
 
     ex_09 = bbp(0)
 
+    # smallest example with H_2(G) = 1.
     ex_10 = densifier(
-                [0, 0, 0, 0, 1, 1, 3, 3, 3, 4, 4, 5],
-                [1, 2, 3, 4, 2, 5, 2, 4, 5, 1, 5, 2]
+                [0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4],
+                [1, 2, 3, 5, 2, 3, 4, 4, 5, 4, 5, 5]
             )
+
+    # like ex_10, but only cycles and thus s_2 = 0.
+    # TODO
+    ex_11 = densifier(
+                [0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4],
+                [1, 2, 3, 5, 2, 3, 4, 4, 5, 4, 5, 5]
+            )
+
+    ex_12 = join_graphs(ex_10, simplex(2))
 
     ex_20 = random_with_p(100,0.05)     #A
     ex_21 = random_with_p(1000,0.05)    #B
@@ -65,13 +88,18 @@ if __name__ == '__main__':
     ex_23 = random_with_p(10000,0.0005) #same amount of edges as B
     ex_24 = random_with_p(10000,0.005)  #10 times the edges as B
 
+    ### single edge only graphs
+    ex_30 = seoify(c_elegans())
+    ex_31 = seoify(random_with_p(300,0.05))
+
 
     examples = [ex_00, ex_01, ex_02, ex_03,
             ex_04, ex_05, ex_06,
             ex_07,
             ex_08, ex_09,
-            ex_10,
+            ex_10, ex_11, ex_12,
             ex_20, ex_21, ex_22, ex_23, ex_24, 
+            ex_30, ex_31,
             ]
 
     for i, ex in enumerate(examples):
