@@ -32,8 +32,7 @@ pub struct State {
     pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
     pub graph: Graph,
     pub flag_count: Vec<usize>,
-    pub flag_count_min: Vec<usize>,
-    pub flag_count_max: Vec<usize>,
+    pub flag_count_prev: Vec<usize>,
 }
 
 impl State {
@@ -58,25 +57,12 @@ impl State {
         let (edge_neighborhood, max_by_dim) = compute_edge_infos(&graph);
         dbg!(&max_by_dim);
         
-        let additional_relax = 1.05; 
-        let mut flag_count_max: Vec<usize> = vec![];
-        let mut flag_count_min: Vec<usize> = vec![];
-        for d in 0..flag_count.len() {
-            let relax : usize = (std::cmp::max(max_by_dim[d]*2, relax_de[d]))/2;
-            flag_count_max.push(((flag_count[d] + 2*relax) as f64 * additional_relax) as usize);
-            flag_count_min.push(((flag_count[d] - relax) as f64 / additional_relax) as usize);
-        }
+        let flag_count_prev = flag_count.clone();
         //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
-        println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
+        println!("flag_coubt: {:?}", &flag_count);
 
 
-        let nchange_dims = max_by_dim.len().checked_sub(2).expect("there should be at least one edge!");
-
-        //for (m, f) in zip_longest(max_by_dim.iter(), 
-        // TODO: flag_count_max/min abhängig von max_by_dim
-        
-
-        State { graph, cliques_by_order, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
+        State { graph, cliques_by_order, flag_count, flag_count_prev, edge_neighborhood}
     }
 
     /// applies transition, returns the change in simplex counts
@@ -117,8 +103,7 @@ impl State {
     }
 
     fn valid(&self) -> bool {
-        return all_le(&self.flag_count_min, &self.flag_count, &0)
-            && all_le(&self.flag_count, &self.flag_count_max, &0);
+        return all_le(&self.flag_count_prev, &self.flag_count, &0);
     }
 
 
