@@ -25,7 +25,7 @@ struct Args{
     p: f64,
 
     #[clap(short='n', long)]
-    nnodes: usize,
+    nnodes: u32,
 
     #[clap(short='l', long)]
     iteration_limit: usize
@@ -34,24 +34,29 @@ struct Args{
 fn main() {
     let args = Args::parse();
     
-    let nnodes = 100;
     let nedges = 1000;
     let mut rng = Xoshiro256StarStar::seed_from_u64(args.seed);
     loop {
-        let g = flag_complex::Graph::gen_seo_er(nnodes, nedges, &mut rng);
+        let g = flag_complex::Graph::gen_seo_er(args.nnodes, args.p, &mut rng);
         let all_clique_count = count_all_cliques(&g);
-        let st = State::new(g.clone());
+        println!("all clique count: {:?}", all_clique_count);
+        let mut st = State::new(g.clone());
         let mut success = false;
-        for _ in 0..args.iteration_limit {
+        for i in 0..args.iteration_limit {
             let t = Transition::single_edge_flip(&st, &mut rng);
             let (pre, post) = st.apply_transition(&t);
             let mut accept = true;
+            if post.len() < pre.len() { accept = false; }
             for(&i,&j) in pre.iter().zip(post.iter()) { if i > j { accept = false; break; } }
             if !accept {
                 st.revert_transition(&t, &(pre, post));
             }
+            if i % 200 == 199 {
+                println!("flag_count: {:?} of {:?}", st.flag_count, all_clique_count);
+            }
             if st.flag_count == all_clique_count {
                 success = true;
+                println!("reached maximum");
                 break;
             }
         }
