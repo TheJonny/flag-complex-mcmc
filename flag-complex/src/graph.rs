@@ -144,7 +144,7 @@ impl<G: DirectedGraph> DirectedGraphExt for G {}
 type Chunk = u64;
 const CHUNK_SIZE: usize = Chunk::BITS as usize;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeMapGraph{
     nnodes: usize,
     edges: IndexSet<Edge>,
