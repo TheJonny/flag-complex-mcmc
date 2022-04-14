@@ -51,12 +51,12 @@ fn main() {
             if !accept {
                 st.revert_transition(&t, &(pre, post));
             }
-            if i % 200 == 199 {
-                println!("flag_count: {:?} of {:?}", st.flag_count, all_clique_count);
+            if i % 1000 == 999 {
+                println!("{} steps, flag_count: {:?} of {:?}", i+1, st.flag_count, all_clique_count);
             }
             if st.flag_count == all_clique_count {
                 success = true;
-                println!("reached maximum");
+                println!("reached maximum after {} steps", i+1);
                 break;
             }
         }
