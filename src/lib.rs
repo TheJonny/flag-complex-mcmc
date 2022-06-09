@@ -38,7 +38,6 @@ pub struct State {
 impl State {
     pub fn new(graph: Graph) -> Self {
 
-        println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
         let mut cliques_by_order = vec![];
         for c in cliques.clone() {
@@ -48,15 +47,12 @@ impl State {
             }
             cliques_by_order[clique_order-1].push(c);
         }
-        println!("initial flagser");
         let flag_count = graph.flagser_count();
 
-        println!("computing edge neighborhoods");
         let edge_neighborhood = compute_edge_infos(&graph);
         
         let flag_count_prev = flag_count.clone();
         //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
-        println!("flag_coubt: {:?}", &flag_count);
 
 
         State { graph, cliques_by_order, flag_count, flag_count_prev, edge_neighborhood}
