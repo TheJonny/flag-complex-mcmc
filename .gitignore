@@ -1,2 +1,4 @@
 /target
 Cargo.lock
+/flag_file_examples/data/
+/state
