@@ -11,6 +11,6 @@ SATID=`printf %03d $SLURM_ARRAY_TASK_ID`
 #OUTDIR=/dev/null
 
 date
-../target/release/seo_search_counterexample -s $SATID -n 7 -p 0.9 -l 50000 -x
+../target/release/seo_search_counterexample -s $SATID -n 5 -p 0.9 -l 50000 -x
 
 date

@@ -33,7 +33,7 @@ fn main() {
     let cxs: &'static _ = Box::leak(cxs);
 
     let mut threads = Vec::new();
-    for i in 0..8 {
+    for i in 0..100 {
         let args = args.clone();
         let t = std::thread::spawn(move || doit(args, cxs));
         threads.push(t);
