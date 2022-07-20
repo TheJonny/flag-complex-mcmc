@@ -64,7 +64,9 @@ fn main() {
             let (pre, post) = st.apply_transition(&t);
             let mut accept = true;
             if post.len() < pre.len() { accept = false; }
-            for(&i,&j) in pre.iter().zip(post.iter()) { if i > j { accept = false; break; } }
+            if post[2] <= pre[2] {accept = false;}
+            //for(&i,&j) in pre.iter().zip(post.iter()) { if i > j { accept = false; break; } }
+
             if accept {
                 //dbg!(&cells_before);
                 if args.exact {
