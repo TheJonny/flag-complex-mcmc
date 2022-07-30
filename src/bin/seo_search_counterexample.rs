@@ -64,7 +64,7 @@ fn main() {
             let (pre, post) = st.apply_transition(&t);
             let mut accept = true;
             if post.len() < pre.len() { accept = false; }
-            if post[2] <= pre[2] {accept = false;}
+            if post.len() > 2 && pre.len() > 2 &&  post[2] <= pre[2] {accept = false;}
             //for(&i,&j) in pre.iter().zip(post.iter()) { if i > j { accept = false; break; } }
 
             if accept {
