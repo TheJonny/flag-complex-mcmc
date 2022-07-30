@@ -20,7 +20,6 @@ struct Args{
     #[clap(short, long, default_value_t = 0)]
     seed: u64,
 
-
     /// edge probability
     #[clap(short)]
     p: f64,
@@ -39,7 +38,6 @@ struct Args{
 fn main() {
     let args = Args::parse();
     
-    let nedges = 1000;
     let mut rng = Xoshiro256StarStar::seed_from_u64(args.seed);
     loop {
         let g = flag_complex::Graph::gen_seo_er(args.nnodes, args.p, &mut rng);
