@@ -57,7 +57,7 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
 
     // sort descending by balance:
     //  first element will be the maximum
-    edges_with_change.sort_unstable_by(|a,b| (b.0).cmp(&a.0));
+    edges_with_change.sort_by(|a,b| (b.0).cmp(&a.0));
 
     if edges_with_change[0].0 < 0 { // no increasing move -> bail out
         //println!("no good moves");
@@ -118,8 +118,6 @@ fn main() {
         let target = count_all_cliques(&g)[2];
 
         let mut st = State::new(g.clone());
-        dbg!(count_all_cliques(&g));
-        dbg!(&st.flag_count);
 
         let success = rec(&mut st, &mut edges, target);
         if !success {
