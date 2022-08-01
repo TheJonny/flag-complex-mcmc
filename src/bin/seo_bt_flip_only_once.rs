@@ -40,10 +40,6 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
     if state.flag_count.get(2).copied().unwrap_or(0) == target {
         return true;
     }
-    if remaining_edges.is_empty() {
-        //println!("no edges remaining");
-        return false;
-    }
 
     let mut edges_with_change = remaining_edges.iter().enumerate().map(|(i, &e)| {
         let t = flip(e);
@@ -58,22 +54,15 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
     // sort descending by balance:
     //  first element will be the maximum
     edges_with_change.sort_by(|a,b| (b.0).cmp(&a.0));
+    //println!("moves: {:?}", edges_with_change);
 
-    if edges_with_change[0].0 < 0 { // no increasing move -> bail out
-        //println!("no good moves");
-        return false;
-    }
-    
-    let end_index =
-        if edges_with_change[0].0 > 0 {
-            1
-        } else {
-            let mut i = 0;
-            while i < edges_with_change.len() && edges_with_change[i].0 == 0 {
-                i += 1;
-            }
-            i
-        };
+    let end_index = {
+        let mut i = 0;
+        while i < edges_with_change.len() && edges_with_change[i].0 >= 0 {
+            i += 1;
+        }
+        i
+    };
 
     for i in 0 .. end_index {
         let e = edges_with_change[i].1;
@@ -97,7 +86,7 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
         assert!(remaining_edges[ei] == e);
     }
 
-    println!("possibilities exhausted");
+    //println!("possibilities exhausted");
     return false;
 }
 
@@ -124,6 +113,7 @@ fn main() {
         if !success {
             println!("FAIL on seed {seed}");
             io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=seed, N=args.nnodes), &g);
+            io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_end.flag", seed=seed, N=args.nnodes), &st.graph);
             std::process::exit(1);
         } else {
             println!("worked for seed {seed}");
