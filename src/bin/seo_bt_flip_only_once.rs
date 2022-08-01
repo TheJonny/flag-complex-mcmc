@@ -103,8 +103,10 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
 
 fn main() {
     let args = Args::parse();
-    let mut rng = Xoshiro256StarStar::seed_from_u64(args.seed);
+    let mut seed = args.seed;
     loop {
+        let mut rng = Xoshiro256StarStar::seed_from_u64(seed);
+        seed += 1000;
         let g = if args.input.is_empty() {
             let mut g = Graph::gen_seo_er(args.nnodes, args.p, &mut rng);
             while (count_all_cliques(&g).len() < 3) {                   // prevents graphs without 3-cliques
@@ -121,15 +123,14 @@ fn main() {
 
         let success = rec(&mut st, &mut edges, target);
         if !success {
-            println!("FAIL");
-            io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=args.seed, N=args.nnodes), &g);
-            //io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_bad.flag", seed=args.seed), &st.graph);
+            println!("FAIL on seed {seed}");
+            io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=seed, N=args.nnodes), &g);
             std::process::exit(1);
         } else {
-            println!("worked this time");
+            println!("worked for seed {seed}");
         }
         if !args.input.is_empty() {
-            std::process::exit(1);
+            std::process::exit(9);
         }
     }
 }
