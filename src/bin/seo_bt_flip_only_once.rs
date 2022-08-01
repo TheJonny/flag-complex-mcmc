@@ -106,7 +106,6 @@ fn main() {
     let mut seed = args.seed;
     loop {
         let mut rng = Xoshiro256StarStar::seed_from_u64(seed);
-        seed += 1000;
         let g = if args.input.is_empty() {
             let mut g = Graph::gen_seo_er(args.nnodes, args.p, &mut rng);
             while (count_all_cliques(&g).len() < 3) {                   // prevents graphs without 3-cliques
@@ -132,6 +131,7 @@ fn main() {
         if !args.input.is_empty() {
             std::process::exit(9);
         }
+        seed += 1000;
     }
 }
 
