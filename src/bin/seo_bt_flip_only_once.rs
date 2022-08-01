@@ -25,10 +25,10 @@ struct Args{
     seed: u64,
 
     /// edge probability
-    #[clap(short)]
+    #[clap(short, default_value_t = 1.0)]
     p: f64,
 
-    #[clap(short='n', long)]
+    #[clap(short='n', long, default_value_t = 0)]
     nnodes: u32,
 }
 
@@ -41,7 +41,7 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
         return true;
     }
     if remaining_edges.is_empty() {
-        println!("no edges remaining");
+        //println!("no edges remaining");
         return false;
     }
 
@@ -60,7 +60,7 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
     edges_with_change.sort_unstable_by(|a,b| (b.0).cmp(&a.0));
 
     if edges_with_change[0].0 < 0 { // no increasing move -> bail out
-        println!("no good moves");
+        //println!("no good moves");
         return false;
     }
     
@@ -88,7 +88,7 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
         if rec(state, remaining_edges, target) {
             return true;
         }
-        println!("rollback");
+        //println!("rollback");
 
         state.revert_transition(&t, &(pre, post));
         remaining_edges.push(e);
@@ -105,25 +105,33 @@ fn main() {
     let args = Args::parse();
     let mut rng = Xoshiro256StarStar::seed_from_u64(args.seed);
     loop {
-        let g = if args.input == "" {
-            Graph::gen_seo_er(args.nnodes, args.p, &mut rng)
+        let g = if args.input.is_empty() {
+            let mut g = Graph::gen_seo_er(args.nnodes, args.p, &mut rng);
+            while (count_all_cliques(&g).len() < 3) {                   // prevents graphs without 3-cliques
+                g = Graph::gen_seo_er(args.nnodes, args.p, &mut rng);
+            }
+            g
         } else {
             io::read_flag_file(&args.input)
         };
         let mut edges = g.edges();
         let target = count_all_cliques(&g)[2];
-        //dbg!(target);
-        let mut st = State::new(g);
-        //dbg!(&st.flag_count);
+
+        let mut st = State::new(g.clone());
+        dbg!(count_all_cliques(&g));
+        dbg!(&st.flag_count);
+
         let success = rec(&mut st, &mut edges, target);
         if !success {
             println!("FAIL");
+            io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=args.seed, N=args.nnodes), &g);
+            //io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_bad.flag", seed=args.seed), &st.graph);
             std::process::exit(1);
         } else {
             println!("worked this time");
         }
-        if args.input == "" { //always triggers. FIXME?
-            //std::process::exit(1);
+        if !args.input.is_empty() {
+            std::process::exit(1);
         }
     }
 }
