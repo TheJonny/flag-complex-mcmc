@@ -129,7 +129,7 @@ fn main() {
             println!("worked for seed {seed}");
         }
         if !args.input.is_empty() {
-            std::process::exit(9);
+            std::process::exit(0);
         }
         seed += 1000;
     }
