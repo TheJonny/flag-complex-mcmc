@@ -48,33 +48,27 @@ fn calc_degree(nnodes: usize, edges: &Vec<Edge>) -> (Vec<u32>, Vec<u32>) {
     return (outdeg, indeg)
 }
 
-fn calc_order_increase(state: &State, edges: &Vec<Edge>) -> Vec<(isize, Edge, usize)> {
+fn calc_order_and_sc_increase(state: &mut State, edges: &Vec<Edge>) -> Vec<(isize, isize, Edge, usize)> {
     let (outdeg, indeg) = calc_degree(state.graph.nnodes(), &state.graph.edges());
     println!("out {outdeg:?} in {indeg:?}");
     let edges_with_change = edges.iter().enumerate().map(|(ind, &[i,j])| {
-        let [i,j] = [i as usize, j as usize];
+        //order change
         let mut order_increase = 0;
-        if indeg[i] > outdeg[i] {order_increase += 2}
-        else if indeg[i] == outdeg[i] {order_increase += 1}
-        else {order_increase += -2}
-        if indeg[j] < outdeg[j] {order_increase += 2}
-        else if indeg[j] == outdeg[j] {order_increase += 1}
-        else {order_increase += -2}
+        if indeg[i as usize] > outdeg[i as usize] {order_increase += 2;}
+        else if indeg[i as usize] == outdeg[i as usize] {order_increase += 1;}
+        else {order_increase += -2;}
+        if indeg[j as usize] < outdeg[j as usize] {order_increase += 2;}
+        else if indeg[j as usize] == outdeg[j as usize] {order_increase += 1;}
+        else {order_increase += -2;}
         
-        (order_increase, [i as u32, j as u32], ind)
-    }).collect::<Vec<_>>();
-    return edges_with_change
-}
-
-fn calc_sc_increase(state: &mut State, edges: &Vec<Edge>) -> Vec<(i32, Edge, usize)> {
-    let edges_with_change = edges.iter().enumerate().map(|(i, &e)| {
-        let t = flip(e);
+        //simplex count change
+        let t = flip([i,j]);
         let (pre, post) = state.apply_transition(&t);
-        let balance = (post.get(2).copied().unwrap_or(0) as i32) - 
-                      (pre.get(2).copied().unwrap_or(0) as i32);
+        let sc_increase = (post.get(2).copied().unwrap_or(0)) as isize - 
+                          (pre.get(2).copied().unwrap_or(0)) as isize;
         state.revert_transition(&t, &(pre, post));
 
-        (balance, e, i)
+        (order_increase, sc_increase, [i,j], ind)
     }).collect::<Vec<_>>();
     return edges_with_change
 }
@@ -83,8 +77,8 @@ fn identify_dropable_vertices(state: &State) -> Vec<Node> {
     let edges = state.graph.edges();
     let nnodes = state.graph.nnodes();
     let (outdeg, indeg) = calc_degree(nnodes, &edges);
-    // dropable: indeg < 3 OR outdeg < 3.
-    // If neither is, not dropable. If both are 0, it was already dropped.
+    // dropable: indeg < 3 OR outdeg < 3. If neither is, not dropable.
+    // If both are 0, it was already dropped.
     let dropable_vertices = (0..nnodes as Node).filter(|&i|
                     ((outdeg[i as usize] < 3) | (indeg[i as usize] < 3))
                     & (indeg[i as usize] > 0 | outdeg[i as usize]) )
@@ -98,7 +92,7 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
         return true;
     }
 
-    /// DROPPING VERTICES
+    //  DROPPING VERTICES
     let dropable_vertices = identify_dropable_vertices(&state);
     println!("vertices to drop: {dropable_vertices:?}");
     if dropable_vertices.len() > 0 {
@@ -120,50 +114,47 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
         }
     }
 
-    /// Looking which edges to flip 
-    let edges_with_sc_change = calc_sc_increase(state, remaining_edges);
-    //let edges_with_order_change = calc_order_increase(state, remaining_edges);
-
-    let mut edges_with_change = edges_with_sc_change;
-    //let mut edges_with_change = edges_with_order_change;
+    // Looking which edges to flip 
+    let mut edges_with_change = calc_order_and_sc_increase(state, remaining_edges);
     
-    // sort descending by balance:
-    //  first element will be the maximum
+    // sort descending by order balance: first element will be the maximum
     edges_with_change.sort_by(|a,b| (b.0).cmp(&a.0));
     println!("moves: {:?}", edges_with_change);
 
-    let end_index = {
-        let mut i = 0;
-        while i < edges_with_change.len() && edges_with_change[i].0 >= 0 {
-            i += 1;
+    /*
+    for &(oi, sci, e, ei) in &edges_with_change {
+        if (oi > 0) & (sci < 0) {
+            println!("edge {e:?} has positive order increase {oi}, but positive simplex count increase {sci}");
+            println!("graph: {:?}", state.graph);
+        } else if (sci > 0) & (oi < 0) {
+            println!("edge {e:?} has negative order increase {oi}, but positive simplex count increase {sci}");
+            println!("graph: {:?}", state.graph);
         }
-        i
-    };
-
-    for i in 0 .. end_index {
-        let e = edges_with_change[i].1;
-        let ei = edges_with_change[i].2;
-        let t = flip(e);
-        println!("Flip: {e:?}");
-        let (pre, post) = state.apply_transition(&t);
-        
-        assert!(remaining_edges[ei] == e);
-        remaining_edges.swap_remove(edges_with_change[i].2);
-
-
-        if rec(state, remaining_edges, target) {
-            return true;
-        }
-        println!("rollback");
-
-        state.revert_transition(&t, &(pre, post));
-        remaining_edges.push(e);
-        let n = remaining_edges.len();
-        remaining_edges.swap(ei, n-1);
-        assert!(remaining_edges[ei] == e);
     }
+    */
+    for (oi, sci, e, ei) in edges_with_change {
+        if (oi >= 0) & (sci >= 0) {
+            let t = flip(e);
+            println!("Flip: {e:?}");
+            let (pre, post) = state.apply_transition(&t);
+            
+            assert!(remaining_edges[ei] == e);
+            remaining_edges.swap_remove(ei);
 
-    //println!("possibilities exhausted");
+
+            if rec(state, remaining_edges, target) {
+                return true;
+            }
+            println!("rollback");
+
+            state.revert_transition(&t, &(pre, post));
+            remaining_edges.push(e);
+            let n = remaining_edges.len();
+            remaining_edges.swap(ei, n-1);
+            assert!(remaining_edges[ei] == e);
+        }
+    }
+    println!("possibilities exhausted");
     return false;
 }
 
@@ -174,7 +165,7 @@ fn main() {
         let mut rng = Xoshiro256StarStar::seed_from_u64(seed);
         let g = if args.input.is_empty() {
             let mut g = Graph::gen_seo_er(args.nnodes, args.p, &mut rng);
-            while (count_all_cliques(&g).len() < 3) {                   // prevents graphs without 3-cliques
+            while count_all_cliques(&g).len() < 3 {                   // prevents graphs without 3-cliques
                 g = Graph::gen_seo_er(args.nnodes, args.p, &mut rng);
             }
             g
