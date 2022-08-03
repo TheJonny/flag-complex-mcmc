@@ -19,7 +19,6 @@ struct Args{
     input: String,
     
 
-
     /// random seed 
     #[clap(short, long, default_value_t = 0)]
     seed: u64,
@@ -30,18 +29,45 @@ struct Args{
 
     #[clap(short='n', long, default_value_t = 0)]
     nnodes: u32,
+
+    #[clap(short='d', long)]
+    debug: bool,
 }
 
 fn flip(e: Edge) -> Transition {
     Transition { change_edges: vec![(e,false), ([e[1], e[0]], true)] }
 }
 
-fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> bool {
-    if state.flag_count.get(2).copied().unwrap_or(0) == target {
-        return true;
+fn calc_degree(nnodes: usize, edges: &Vec<Edge>) -> (Vec<u32>, Vec<u32>) {
+    let mut outdeg = vec![0; nnodes];
+    let mut indeg = vec![0; nnodes];
+    for &[i,j] in edges {
+        outdeg[i as usize] += 1;
+        indeg[j as usize] += 1;
     }
+    return (outdeg, indeg)
+}
 
-    let mut edges_with_change = remaining_edges.iter().enumerate().map(|(i, &e)| {
+fn calc_order_increase(state: &State, edges: &Vec<Edge>) -> Vec<(isize, Edge, usize)> {
+    let (outdeg, indeg) = calc_degree(state.graph.nnodes(), &state.graph.edges());
+    println!("out {outdeg:?} in {indeg:?}");
+    let edges_with_change = edges.iter().enumerate().map(|(ind, &[i,j])| {
+        let [i,j] = [i as usize, j as usize];
+        let mut order_increase = 0;
+        if indeg[i] > outdeg[i] {order_increase += 2}
+        else if indeg[i] == outdeg[i] {order_increase += 1}
+        else {order_increase += -2}
+        if indeg[j] < outdeg[j] {order_increase += 2}
+        else if indeg[j] == outdeg[j] {order_increase += 1}
+        else {order_increase += -2}
+        
+        (order_increase, [i as u32, j as u32], ind)
+    }).collect::<Vec<_>>();
+    return edges_with_change
+}
+
+fn calc_sc_increase(state: &mut State, edges: &Vec<Edge>) -> Vec<(i32, Edge, usize)> {
+    let edges_with_change = edges.iter().enumerate().map(|(i, &e)| {
         let t = flip(e);
         let (pre, post) = state.apply_transition(&t);
         let balance = (post.get(2).copied().unwrap_or(0) as i32) - 
@@ -50,11 +76,61 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
 
         (balance, e, i)
     }).collect::<Vec<_>>();
+    return edges_with_change
+}
 
+fn identify_dropable_vertices(state: &State) -> Vec<Node> {
+    let edges = state.graph.edges();
+    let nnodes = state.graph.nnodes();
+    let (outdeg, indeg) = calc_degree(nnodes, &edges);
+    // dropable: indeg < 3 OR outdeg < 3.
+    // If neither is, not dropable. If both are 0, it was already dropped.
+    let dropable_vertices = (0..nnodes as Node).filter(|&i|
+                    ((outdeg[i as usize] < 3) | (indeg[i as usize] < 3))
+                    & (indeg[i as usize] > 0 | outdeg[i as usize]) )
+        .collect::<Vec<Node>>();
+    return dropable_vertices
+}
+
+fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> bool {
+    println!("current number of 2-simps is {} while target is {target}", state.flag_count.get(2).copied().unwrap_or(0));
+    if state.flag_count.get(2).copied().unwrap_or(0) == target {
+        return true;
+    }
+
+    /// DROPPING VERTICES
+    let dropable_vertices = identify_dropable_vertices(&state);
+    println!("vertices to drop: {dropable_vertices:?}");
+    if dropable_vertices.len() > 0 {
+        let mut new_graph = state.graph.clone();
+        for [i,j] in new_graph.edges() {
+            if dropable_vertices.binary_search(&i).is_ok() || dropable_vertices.binary_search(&j).is_ok() {
+                new_graph.remove_edge(i,j);
+            }
+        }
+        // update desired simplex count and actual simplices
+        let mut new_state = State::new(new_graph.clone());
+        let new_target = count_all_cliques(&new_state.graph).get(2).copied().unwrap_or(0);
+
+        // update remaining edges
+        let mut new_remaining_edges = remaining_edges.iter().cloned().filter(|[i,j]| !(dropable_vertices.binary_search(&i).is_ok() || dropable_vertices.binary_search(&j).is_ok())).collect();
+
+        if rec(&mut new_state, &mut new_remaining_edges, new_target) {
+            return true;
+        }
+    }
+
+    /// Looking which edges to flip 
+    let edges_with_sc_change = calc_sc_increase(state, remaining_edges);
+    //let edges_with_order_change = calc_order_increase(state, remaining_edges);
+
+    let mut edges_with_change = edges_with_sc_change;
+    //let mut edges_with_change = edges_with_order_change;
+    
     // sort descending by balance:
     //  first element will be the maximum
     edges_with_change.sort_by(|a,b| (b.0).cmp(&a.0));
-    //println!("moves: {:?}", edges_with_change);
+    println!("moves: {:?}", edges_with_change);
 
     let end_index = {
         let mut i = 0;
@@ -68,16 +144,17 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
         let e = edges_with_change[i].1;
         let ei = edges_with_change[i].2;
         let t = flip(e);
-        //println!("Flip: {e:?}");
+        println!("Flip: {e:?}");
         let (pre, post) = state.apply_transition(&t);
         
         assert!(remaining_edges[ei] == e);
         remaining_edges.swap_remove(edges_with_change[i].2);
 
+
         if rec(state, remaining_edges, target) {
             return true;
         }
-        //println!("rollback");
+        println!("rollback");
 
         state.revert_transition(&t, &(pre, post));
         remaining_edges.push(e);
@@ -104,6 +181,9 @@ fn main() {
         } else {
             io::read_flag_file(&args.input)
         };
+        if args.debug {
+            io::save_flag_file(&format!("debug_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=seed, N=args.nnodes), &g);
+        }
         let mut edges = g.edges();
         let target = count_all_cliques(&g)[2];
 
@@ -113,7 +193,6 @@ fn main() {
         if !success {
             println!("FAIL on seed {seed}");
             io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=seed, N=args.nnodes), &g);
-            io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_end.flag", seed=seed, N=args.nnodes), &st.graph);
             std::process::exit(1);
         } else {
             println!("worked for seed {seed}");
@@ -139,6 +218,5 @@ fn count_all_cliques(graph: &Graph) -> Vec<usize>{
     for &[a,b] in &undirected_edges {
         normalized_graph.add_edge(a, b);
     }
-
     flag_complex::count_cells(&normalized_graph)
 }
