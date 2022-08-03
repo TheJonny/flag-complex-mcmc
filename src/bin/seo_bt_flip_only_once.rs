@@ -117,8 +117,8 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> boo
     // Looking which edges to flip 
     let mut edges_with_change = calc_order_and_sc_increase(state, remaining_edges);
     
-    // sort descending by order balance: first element will be the maximum
-    edges_with_change.sort_by(|a,b| (b.0).cmp(&a.0));
+    // sort descending by simplex count increase: first element will be the maximum
+    edges_with_change.sort_by(|a,b| (b.1).cmp(&a.1));
     println!("moves: {:?}", edges_with_change);
 
     /*
