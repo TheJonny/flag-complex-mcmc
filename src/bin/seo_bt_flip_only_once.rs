@@ -30,22 +30,15 @@ struct Args{
 
     #[clap(short='n', long, default_value_t = 0)]
     nnodes: u32,
-
-    #[clap(long)]
-    itd: bool,
 }
 
 fn flip(e: Edge) -> Transition {
     Transition { change_edges: vec![(e,false), ([e[1], e[0]], true)] }
 }
 
-fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize, maxdepth: usize) -> bool {
+fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize) -> bool {
     if state.flag_count.get(2).copied().unwrap_or(0) == target {
         return true;
-    }
-    if maxdepth == 0 {
-        //println!("reached maxdepth");
-        return false;
     }
 
     let mut edges_with_change = remaining_edges.iter().enumerate().map(|(i, &e)| {
@@ -81,7 +74,7 @@ fn rec(state: &mut State, remaining_edges: &mut Vec<Edge>, target: usize, maxdep
         assert!(remaining_edges[ei] == e);
         remaining_edges.swap_remove(edges_with_change[i].2);
 
-        if rec(state, remaining_edges, target, maxdepth - 1) {
+        if rec(state, remaining_edges, target) {
             return true;
         }
         //println!("rollback");
@@ -115,22 +108,8 @@ fn main() {
         let target = count_all_cliques(&g)[2];
 
         let mut st = State::new(g.clone());
-        io::save_flag_file("wip.flag",  &g);
 
-        let mut success = false;
-        let maxdepth = edges.len();
-        if args.itd {
-            for depth in 0 ..= maxdepth {
-                dbg!(depth);
-                success = rec(&mut st, &mut edges, target, depth);
-                if success {
-                    println!("length {depth}");
-                    break;
-                }
-            }
-        } else {
-            success = rec(&mut st, &mut edges, target, maxdepth);
-        }
+        let success = rec(&mut st, &mut edges, target);
         if !success {
             println!("FAIL on seed {seed}");
             io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=seed, N=args.nnodes), &g);
