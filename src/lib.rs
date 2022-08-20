@@ -32,8 +32,6 @@ pub struct State {
     pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
     pub graph: Graph,
     pub flag_count: Vec<usize>,
-    pub flag_count_min: Vec<usize>,
-    pub flag_count_max: Vec<usize>,
 }
 
 impl State {
@@ -51,32 +49,12 @@ impl State {
         }
         println!("initial flagser");
         let flag_count = graph.flagser_count();
-        let relax_de = crate::util::calc_relax_de(&flag_count);
-        dbg!(&relax_de);
 
         println!("computing edge neighborhoods");
-        let (edge_neighborhood, max_by_dim) = compute_edge_infos(&graph);
-        dbg!(&max_by_dim);
-        
-        let additional_relax = 1.05; 
-        let mut flag_count_max: Vec<usize> = vec![];
-        let mut flag_count_min: Vec<usize> = vec![];
-        for d in 0..flag_count.len() {
-            let relax : usize = (std::cmp::max(max_by_dim[d]*2, relax_de[d]))/2;
-            flag_count_max.push(((flag_count[d] + 2*relax) as f64 * additional_relax) as usize);
-            flag_count_min.push(((flag_count[d] - relax) as f64 / additional_relax) as usize);
-        }
-        //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
-        println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &flag_count, &flag_count_min, &flag_count_max);
-
-
-        let nchange_dims = max_by_dim.len().checked_sub(2).expect("there should be at least one edge!");
-
-        //for (m, f) in zip_longest(max_by_dim.iter(), 
-        // TODO: flag_count_max/min abhängig von max_by_dim
+        let edge_neighborhood = compute_edge_neighborhoods(&graph);
         
 
-        State { graph, cliques_by_order, flag_count, flag_count_min, flag_count_max, edge_neighborhood}
+        State { graph, cliques_by_order, flag_count, edge_neighborhood}
     }
 
     /// applies transition, returns the change in simplex counts
@@ -116,10 +94,6 @@ impl State {
         }
     }
 
-    fn valid(&self) -> bool {
-        return all_le(&self.flag_count_min, &self.flag_count, &0)
-            && all_le(&self.flag_count, &self.flag_count_max, &0);
-    }
 
 
     pub fn edgeset_neighborhood(&self, edges: &[Edge]) -> Vec<Node>{
@@ -136,16 +110,94 @@ impl State {
         return affected_vertices;
     }
 }
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Bounds {
+    pub flag_count_min: Vec<usize>,
+    pub flag_count_max: Vec<usize>,
+}
+impl Bounds {
+    pub fn calculate(initial: &State) -> Self {
+        // to determine the acceptance limits, we need to know, how much damage flipping any single edge
+        // can do (in each dimension).
+        // therefore we calculate the number of adjacent (not necessarly maximal) cliques...
+
+        let undirected_edges = initial.graph.undirected_edges();
+        let mut normalized_graph = Graph::new_disconnected(initial.graph.nnodes());
+        for &[a,b] in &undirected_edges {
+            normalized_graph.add_edge(a, b);
+        }
+
+        let mut nqliques_by_edge_and_dim = HashMap::<Edge, Vec<usize>>::with_capacity(undirected_edges.len());
+
+        let mut count_for_edges = |simplex: &[Node]| {
+            let dim = simplex.len() - 1;
+            // iterate over simplex's edges
+            for (i,&b) in simplex.iter().enumerate() {
+                for &a in &simplex[0..i] {
+                    assert!(a>b);
+                    let by_dim = nqliques_by_edge_and_dim.entry([a,b]).or_insert_with(Vec::new);
+                    if by_dim.len() <= dim {
+                        by_dim.resize(dim+1, 0);
+                    }
+                    by_dim[dim] += 1;
+                }
+            }
+        };
+        flag_complex::for_each_cell(&normalized_graph, &mut count_for_edges,0, normalized_graph.nnodes());
+
+        //  ... and compute the maximums by dimension
+        let mut max_by_dim = vec![];
+        for by_dim in nqliques_by_edge_and_dim.values() {
+            if max_by_dim.len() < by_dim.len() {
+                max_by_dim.resize(by_dim.len(), 0);
+            }
+            for (m, x) in max_by_dim.iter_mut().zip(by_dim) {
+                *m = max(*m, *x);
+            }
+        }
+        dbg!(&max_by_dim);
+
+        let additional_relax = 1.05; 
+        let mut flag_count_max: Vec<usize> = vec![];
+        let mut flag_count_min: Vec<usize> = vec![];
+        let relax_de = crate::util::calc_relax_de(&initial.flag_count);
+        dbg!(&relax_de);
+        for d in 0..initial.flag_count.len() {
+            let relax : usize = (std::cmp::max(max_by_dim[d]*2, relax_de[d]))/2;
+            flag_count_max.push(((initial.flag_count[d] + 2*relax) as f64 * additional_relax) as usize);
+            flag_count_min.push(((initial.flag_count[d] - relax) as f64 / additional_relax) as usize);
+        }
+        //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
+        println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &initial.flag_count, &flag_count_min, &flag_count_max);
+
+
+        let nchange_dims = max_by_dim.len().checked_sub(2).expect("there should be at least one edge!");
+
+        //for (m, f) in zip_longest(max_by_dim.iter(), 
+        // TODO: flag_count_max/min abhängig von max_by_dim
+        Bounds { flag_count_min, flag_count_max}
+    }
+    pub fn check(&self, state: &State) -> bool {
+        return all_le(&self.flag_count_min, &state.flag_count, &0)
+            && all_le(&state.flag_count, &self.flag_count_max, &0);
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MCMCSampler<R: Rng> {
+    // Variable State
+    pub rng: R,
     pub state: State,
+
+    // Settings
+    pub bounds: Bounds,
     pub move_distribution: WeightedIndex<f64>,
     pub clique_order_distribution: WeightedIndex<f64>,
     pub sample_distance: usize,
+
+    // Metrics
     pub sampled: usize,
     pub accepted: usize,
-    pub rng: R,
 }
 
 impl<R: Rng> MCMCSampler<R> {
@@ -154,7 +206,7 @@ impl<R: Rng> MCMCSampler<R> {
             let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution, &self.clique_order_distribution);
             let counters = self.state.apply_transition(&t);
             self.sampled += 1;
-            if self.state.valid() {
+            if self.bounds.check(&self.state) {
                 self.accepted += 1;
             }
             else {
@@ -293,17 +345,8 @@ impl Transition {
     }
 }
 /// for every edge, this gathers the nodes that are connected to both ends.
-fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
+fn compute_edge_neighborhoods(graph: &Graph)-> HashMap<Edge, Vec<Node>>{
     let mut undirected_adj_lists = vec![vec![]; graph.nnodes()];
-    let mut undirected_edges = graph.edges();
-    for e in &mut undirected_edges {
-        let a = max(e[0], e[1]);
-        let b = min(e[0], e[1]);
-        *e = [a, b];
-    }
-    undirected_edges.sort_unstable();
-    undirected_edges.dedup();
-
     for [a,b] in graph.edges() {
         undirected_adj_lists[a as usize].push(b);
         undirected_adj_lists[b as usize].push(a);
@@ -312,6 +355,7 @@ fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
         v.sort_unstable();
     }
 
+    let undirected_edges = graph.undirected_edges();
     let mut respairs = vec![];
     undirected_edges.par_iter().map(|&[a, b]| {
         assert!(a > b);
@@ -325,43 +369,5 @@ fn compute_edge_infos(graph: &Graph)-> (HashMap<Edge, Vec<Node>>, Vec<usize>){
         edge_neighborhood.insert(e, l);
     }
     
-    // to determine the acceptance limits, we need to know, how much damage flipping any single edge
-    // can do (in each dimension).
-    // therefore we calculate the number of adjacent (not necessarly maximal) cliques...
-
-    let mut normalized_graph = Graph::new_disconnected(graph.nnodes());
-    for &[a,b] in &undirected_edges {
-        normalized_graph.add_edge(a, b);
-    }
-
-    let mut nqliques_by_edge_and_dim = HashMap::<Edge, Vec<usize>>::with_capacity(undirected_edges.len());
-
-    let mut count_for_edges = |simplex: &[Node]| {
-        let dim = simplex.len() - 1;
-        // iterate over simplex's edges
-        for (i,&b) in simplex.iter().enumerate() {
-            for &a in &simplex[0..i] {
-                assert!(a>b);
-                let by_dim = nqliques_by_edge_and_dim.entry([a,b]).or_insert_with(Vec::new);
-                if by_dim.len() <= dim {
-                    by_dim.resize(dim+1, 0);
-                }
-                by_dim[dim] += 1;
-            }
-        }
-    };
-    flag_complex::for_each_cell(&normalized_graph, &mut count_for_edges,0, normalized_graph.nnodes());
-
-    //  ... and compute the maximums by dimension
-    let mut max_by_dim = vec![];
-    for by_dim in nqliques_by_edge_and_dim.values() {
-        if max_by_dim.len() < by_dim.len() {
-            max_by_dim.resize(by_dim.len(), 0);
-        }
-        for (m, x) in max_by_dim.iter_mut().zip(by_dim) {
-            *m = max(*m, *x);
-        }
-    }
-
-    return (edge_neighborhood, max_by_dim);
+    return edge_neighborhood;
 }

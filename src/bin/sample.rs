@@ -66,7 +66,8 @@ fn main() {
         let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
         dbg!(&adjusted_clique_order);
         let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
-        let mut sampler = MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng};
+        let bounds = Bounds::calculate(&st);
+        let sampler = MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng, bounds};
         (0, sampler)
     };
     let sample_index_end = sample_index_start + args.number_of_samples;
