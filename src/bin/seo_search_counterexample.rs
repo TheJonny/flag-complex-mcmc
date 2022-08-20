@@ -11,7 +11,9 @@ use flag_complex::{Node, Edge};
 use clap::Parser;
 
 
-/// MCMC sampler for flag complexes of a directed graph
+/// search "the" "center" of our graph space: a DAG
+/// there all cliques are simplices.
+
 #[derive(Parser, Debug)]
 #[clap(version, about, long_about = None)]
 struct Args{

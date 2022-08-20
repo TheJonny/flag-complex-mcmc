@@ -32,7 +32,6 @@ pub struct State {
     pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
     pub graph: Graph,
     pub flag_count: Vec<usize>,
-    pub flag_count_prev: Vec<usize>,
 }
 
 impl State {
@@ -51,11 +50,10 @@ impl State {
 
         let edge_neighborhood = compute_edge_infos(&graph);
         
-        let flag_count_prev = flag_count.clone();
         //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
 
 
-        State { graph, cliques_by_order, flag_count, flag_count_prev, edge_neighborhood}
+        State { graph, cliques_by_order, flag_count, edge_neighborhood}
     }
 
     /// applies transition, returns the change in simplex counts
@@ -96,7 +94,7 @@ impl State {
     }
 
     fn valid(&self) -> bool {
-        return all_le(&self.flag_count_prev, &self.flag_count, &0);
+        unimplemented!("DELETED boundaries from state - TODO")
     }
 
 
@@ -134,7 +132,6 @@ impl<R: Rng> MCMCSampler<R> {
             self.sampled += 1;
             if self.state.valid() {
                 self.accepted += 1;
-                self.state.flag_count_prev = self.state.flag_count.clone();
             }
             else {
                 self.state.revert_transition(&t, &counters);
