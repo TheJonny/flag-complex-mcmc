@@ -82,3 +82,12 @@ pub fn new_hdf_file(state_store_dir:&str, label:&str, seed:u64) -> hdf5::Result<
     //TODO: Add metadata/comment to this file
     return Ok(());
 }
+
+pub fn save_dot<G: DirectedGraph, W: std::io::Write>(writer: &mut W, graph:&G) -> std::io::Result<()> {
+    writeln!(writer, "digraph x {{")?;
+    for [a,b] in graph.edges() {
+        writeln!(writer, "{} -> {};", a, b)?;
+    }
+    writeln!(writer, "}}")?;
+    Ok(())
+}
