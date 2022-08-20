@@ -10,6 +10,8 @@ use indexmap::set::IndexSet;
 
 use std::cmp::{min, max};
 
+use crate::complex;
+
 pub trait DirectedGraph: Sync {
     fn has_edge(&self, from: Node, to: Node) -> bool;
     fn add_edge(&mut self, from: Node, to: Node);
@@ -100,7 +102,7 @@ pub trait DirectedGraphExt: DirectedGraph {
         let mut add = |cell: &[Node]| {
             result.push(cell.into())
         };
-        crate::flag_complex::for_each_cell(&normalized_graph, &mut add, 0, self.nnodes());
+        complex::for_each_cell(&normalized_graph, &mut add, 0, self.nnodes());
         return result
     }
     /// recursion for compute_maximal_cliques
@@ -134,7 +136,7 @@ pub trait DirectedGraphExt: DirectedGraph {
     
     fn flagser_count(&self) -> Vec<usize> {
         //crate::flagser::count_unweighted(self.nnodes(), &self.edges())
-        crate::flag_complex::count_cells(self)
+        complex::count_cells(self)
     }
 
 }
