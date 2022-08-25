@@ -7,32 +7,52 @@ use std::fs;
 
 use clap::Parser;
 
+// Advanced users may set hardcoded target/relaxed simplex counts boundaries here.
+// They overwrite target_relaxation command line option.
+let target_bounds_lower = vec!([]);
+let target_bounds_upper = vec!([]);
+let relaxed_bounds_lower = vec!([]);
+let relaxed_bounds_upper = vec!([]);
+
+// other stuff to tinker with: Obscure enough to not bother with command line options
+let move_distribution = WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
+
 
 /// MCMC sampler for flag complexes of a directed graph
 #[derive(Parser, Debug)]
 #[clap(version, about, long_about = None)]
 struct Args{
-    /// label
-    #[clap(short, long)]
-    label: String,
-
+    // Sampler configuration
     /// flag input file location
     #[clap(short, long)]
     input: String,
-    
-    /// random seed 
-    #[clap(short, long, default_value_t = 0)]
-    seed: u64,
 
+    /// target relaxation (percentage)
+    #[clap(short, long), default_value_t = 0.05]
+    target_relaxation: f64,
+       
     /// number of samples to draw
     #[clap(short, long, default_value_t = 1000)]
     number_of_samples: usize,
+
+
+    // Sampler configuration: Technical
+    /// short human-readable label for reference
+    #[clap(short, long)]
+    label: String,
+
+    /// random seed 
+    #[clap(short, long, default_value_t = 0)]
+    seed: u64,
 
     /// sample_distance: number of steps between too samples
     #[clap(long, default_value_t = 4000)]
     sample_distance: usize,
 
-    /// continue: look for a serde file and continue from there
+
+    // Caching, saving, restoring
+    /// continue: load given serde file and continue from there.
+    /// Takes precedence over almost all other options if present.
     #[clap(short, long, default_value = "")]
     continue_from: String,
 
@@ -49,6 +69,22 @@ struct Args{
     state_save_interval: usize,
 }
 
+fn initialize_new_sampler(args: &Args) -> MCMCSampler {
+    
+    let g = io::read_flag_file(&args.input);
+
+    let st = State::new(g);
+
+    println!("we have the following number of maximal k-cliques {:?}", st.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
+    let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
+    let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
+    dbg!(&adjusted_clique_order);
+    let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
+
+    let bounds = Bounds::calculate(&st);
+    return MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng, bounds};
+}
+
 fn main() {
     let args = Args::parse();
     fs::create_dir_all(&args.state_store_dir).expect("could not create state storage directory");
@@ -57,17 +93,8 @@ fn main() {
     let (sample_index_start, mut sampler) = if !args.continue_from.is_empty() {
         io::load_state(&args.continue_from).expect("unable to load state")
     } else {
-        let g = io::read_flag_file(&args.input);
         io::new_hdf_file(&args.samples_store_dir, &args.label, args.seed).unwrap();
-        let st = State::new(g);
-        println!("we have the following number of maximal k-cliques {:?}", st.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
-        let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
-        let move_distribution = WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
-        let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
-        dbg!(&adjusted_clique_order);
-        let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
-        let bounds = Bounds::calculate(&st);
-        let sampler = MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng, bounds};
+        initialize_new_sampler(&args)
         (0, sampler)
     };
     let sample_index_end = sample_index_start + args.number_of_samples;
