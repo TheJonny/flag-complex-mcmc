@@ -71,6 +71,11 @@ pub fn factorial(x: usize) -> usize {
     return res;
 }
 
+pub fn binomial(n: usize, k:usize) -> usize{
+    // quite unsafe and stupid. there are better methods, but not in stdlib
+    return factorial(n) / (factorial(k) * factorial(n-k))
+}
+
 pub fn calc_relax_de(sc: &Vec<usize>) -> Vec<usize> {
     let mut relax_de = vec![];
     for d in 0..sc.len() {

@@ -131,58 +131,29 @@ impl Bounds {
         println!("{ncliques:?}");
         
         // SEO-case: Just use ncliques as upper boundary
+        // See TODO:REF in the paper
         if undirected_edges.len() == initial.flag_count[1] {
             return Bounds{flag_count_min:target_bounds.flag_count_min, flag_count_max:ncliques}
         }
 
-        let mut ncliques_by_edge_and_dim = HashMap::<Edge, Vec<usize>>::with_capacity(undirected_edges.len());
-
-        let mut count_for_edges = |simplex: &[Node]| {
-            let dim = simplex.len() - 1;
-            // iterate over simplex's edges
-            for (i,&b) in simplex.iter().enumerate() {
-                for &a in &simplex[0..i] {
-                    assert!(a>b);
-                    let by_dim = ncliques_by_edge_and_dim.entry([a,b]).or_insert_with(Vec::new);
-                    if by_dim.len() <= dim {
-                        by_dim.resize(dim+1, 0);
-                    }
-                    by_dim[dim] += 1;
-                }
-            }
-        };
-        flag_complex::for_each_cell(&normalized_graph, &mut count_for_edges,0, normalized_graph.nnodes());
-
-        //  ... and compute the maximums by dimension
-        let mut max_by_dim = vec![];
-        for by_dim in ncliques_by_edge_and_dim.values() {
-            if max_by_dim.len() < by_dim.len() {
-                max_by_dim.resize(by_dim.len(), 0);
-            }
-            for (m, x) in max_by_dim.iter_mut().zip(by_dim) {
-                *m = max(*m, *x);
-            }
-        }
-        dbg!(&max_by_dim);
-
         let mut flag_count_min = target_bounds.flag_count_min.clone();
         let mut flag_count_max = target_bounds.flag_count_max.clone();
         let relax_de = crate::util::calc_relax_de(&initial.flag_count);
-        dbg!(&relax_de);
+        //dbg!(&relax_de);
         for d in 2..initial.flag_count.len() {
-            let relax : usize = (std::cmp::max(max_by_dim[d]*2, relax_de[d]))/2;
-            dbg!(relax);
+            let denseness_factor = crate::util::binomial(initial.flag_count.len() - 2, d - 1); //TODO: refine further
+            //dbg!(denseness_factor);
+            let relax = relax_de[d] * denseness_factor;
+            //dbg!(relax);
             flag_count_max[d] = std::cmp::max(flag_count_min[d] + relax, flag_count_max[d]);
             flag_count_min[d] = std::cmp::min(flag_count_max[d] - relax, flag_count_min[d]);
         }
-        //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
+        flag_count_max[2] = usize::MAX; // can't hurt
+        flag_count_max.push(10); // can't hurt either
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &initial.flag_count, &flag_count_min, &flag_count_max);
-
 
         let nchange_dims = max_by_dim.len().checked_sub(2).expect("there should be at least one edge!");
 
-        //for (m, f) in zip_longest(max_by_dim.iter(), 
-        // TODO: flag_count_max/min abhängig von max_by_dim
         Bounds { flag_count_min, flag_count_max}
     }
     pub fn check(&self, state: &State) -> bool {
