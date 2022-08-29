@@ -9,13 +9,11 @@ use clap::Parser;
 
 // Advanced users may set hardcoded target/relaxed simplex counts boundaries here.
 // They overwrite target_relaxation command line option.
-let target_bounds_lower = vec!([]);
-let target_bounds_upper = vec!([]);
-let relaxed_bounds_lower = vec!([]);
-let relaxed_bounds_upper = vec!([]);
+const const_target_bounds:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![]};
+const const_relaxed_bounds:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![]};
 
 // other stuff to tinker with: Obscure enough to not bother with command line options
-let move_distribution = WeightedIndex::new([0.1, 0.1, 0.06, 0.2]).unwrap();
+const const_move_distribution:[f64; 4] = [0.1, 0.1, 0.06, 0.2];
 
 
 /// MCMC sampler for flag complexes of a directed graph
@@ -28,7 +26,7 @@ struct Args{
     input: String,
 
     /// target relaxation (percentage)
-    #[clap(short, long), default_value_t = 0.05]
+    #[clap(short, long, default_value_t = 0.05)]
     target_relaxation: f64,
        
     /// number of samples to draw
@@ -69,8 +67,7 @@ struct Args{
     state_save_interval: usize,
 }
 
-fn initialize_new_sampler(args: &Args) -> MCMCSampler {
-    
+fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
     let g = io::read_flag_file(&args.input);
 
     let st = State::new(g);
@@ -80,8 +77,21 @@ fn initialize_new_sampler(args: &Args) -> MCMCSampler {
     let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
     dbg!(&adjusted_clique_order);
     let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
-
-    let bounds = Bounds::calculate(&st);
+    
+    let target_bounds = if const_target_bounds.flag_count_min.len() == 0 || const_target_bounds.flag_count_max.len() == 0 {
+        let flag_count_min = st.flag_count.iter().enumerate().map(|(d, &scd)| if d < 2 {scd} else {(scd as f64 * (1. - args.target_relaxation)).floor() as usize}).collect();
+        let flag_count_max = st.flag_count.iter().enumerate().map(|(d, &scd)| if d < 2 {scd} else {(scd as f64 * (1. + args.target_relaxation)).floor() as usize}).collect();
+        Bounds{flag_count_min, flag_count_max}
+    } else {
+        const_target_bounds
+    };
+    let bounds = if const_relaxed_bounds.flag_count_min.len() == 0 || const_relaxed_bounds.flag_count_max.len() == 0 {
+        Bounds::calculate(&st, target_bounds.clone())
+    } else {
+        const_relaxed_bounds
+    };
+    println!("initial simplex count is {:?}, target_bounds are {target_bounds:?} and relaxed_bounds {bounds:?}", st.flag_count);
+    let move_distribution: WeightedIndex<f64> = WeightedIndex::new(const_move_distribution).unwrap();
     return MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng, bounds};
 }
 
@@ -94,8 +104,7 @@ fn main() {
         io::load_state(&args.continue_from).expect("unable to load state")
     } else {
         io::new_hdf_file(&args.samples_store_dir, &args.label, args.seed).unwrap();
-        initialize_new_sampler(&args)
-        (0, sampler)
+        (0, initialize_new_sampler(&args))
     };
     let sample_index_end = sample_index_start + args.number_of_samples;
     for i in sample_index_start..sample_index_end {
