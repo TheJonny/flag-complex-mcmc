@@ -152,8 +152,6 @@ impl Bounds {
         flag_count_max.push(10); // can't hurt either
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &initial.flag_count, &flag_count_min, &flag_count_max);
 
-        let nchange_dims = max_by_dim.len().checked_sub(2).expect("there should be at least one edge!");
-
         Bounds { flag_count_min, flag_count_max}
     }
     pub fn check(&self, state: &State) -> bool {
