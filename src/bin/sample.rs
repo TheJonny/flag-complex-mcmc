@@ -44,7 +44,7 @@ struct Args{
     seed: u64,
 
     /// sample_distance: number of steps between too samples
-    #[clap(long, default_value_t = 4000)]
+    #[clap(long, default_value_t = 0)]
     sample_distance: usize,
 
 
@@ -76,7 +76,6 @@ fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
     let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
     let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
     let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
-    
     let target_bounds = if TARGET_BOUNDS.flag_count_min.len() == 0 || TARGET_BOUNDS.flag_count_max.len() == 0 {
         let flag_count_min = st.flag_count.iter().enumerate().map(|(d, &scd)| if d < 2 {scd} else {(scd as f64 * (1. - args.target_relaxation)).floor() as usize}).collect();
         let flag_count_max = st.flag_count.iter().enumerate().map(|(d, &scd)| if d < 2 {scd} else {(scd as f64 * (1. + args.target_relaxation)).floor() as usize}).collect();
@@ -90,7 +89,8 @@ fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
         RELAXED_BOUNDS
     };
     let move_distribution: WeightedIndex<f64> = WeightedIndex::new(MOVE_DISTRIBUTION).unwrap();
-    return MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng, bounds};
+    let sample_distance = if args.sample_distance == 0 {2*st.flag_count[1]} else {args.sample_distance};
+    return MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: sample_distance, accepted: 0, sampled: 0, rng, bounds};
 }
 
 fn main() {
