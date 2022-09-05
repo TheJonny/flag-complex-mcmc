@@ -97,8 +97,8 @@ fn main() {
             }
         }
         if ! success {
-            io::save_flag_file(&format!("counterexample_seo_greedy_{seed}_start.flag", seed=args.seed), &g);
-            io::save_flag_file(&format!("counterexample_seo_greedy_{seed}_bad.flag", seed=args.seed), &st.graph);
+            io::save_flag_file(&format!("counterexample_seo_greedy_{seed}_start.flag", seed=args.seed), &g).unwrap();
+            io::save_flag_file(&format!("counterexample_seo_greedy_{seed}_bad.flag", seed=args.seed), &st.graph).unwrap();
             break;
         }
     }

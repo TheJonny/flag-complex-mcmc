@@ -65,7 +65,7 @@ pub fn save_to_hdf<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64,
     let file = hdf5::File::open_rw(format!("{state_store_dir}/{label}-{seed:03}.hdf5"))?;
     let groupname = format!("/{seed:03}/{sample_number:06}");
     if file.link_exists(&groupname) {
-        file.unlink(&groupname);
+        file.unlink(&groupname)?;
     }
     let group = file.create_group(&groupname)?;
     let builder = group.new_dataset_builder();

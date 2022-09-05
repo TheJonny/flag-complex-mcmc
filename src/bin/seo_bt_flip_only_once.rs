@@ -173,7 +173,7 @@ fn main() {
             io::read_flag_file(&args.input)
         };
         if args.debug {
-            io::save_flag_file(&format!("debug_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=seed, N=args.nnodes), &g);
+            io::save_flag_file(&format!("debug_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=seed, N=args.nnodes), &g).unwrap();
         }
         let mut edges = g.edges();
         let target = count_all_cliques(&g)[2];
@@ -183,7 +183,7 @@ fn main() {
         let success = rec(&mut st, &mut edges, target);
         if !success {
             println!("FAIL on seed {seed}");
-            io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=seed, N=args.nnodes), &g);
+            io::save_flag_file(&format!("counterexample_seo_flip_only_once_{seed:02}_N_{N:02}_start.flag", seed=seed, N=args.nnodes), &g).unwrap();
             std::process::exit(1);
         } else {
             println!("worked for seed {seed}");

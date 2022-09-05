@@ -1,11 +1,9 @@
 // Authors: "Jonathan Krebs and Florian Unger"
 use directed_scm::*;
-use rand::SeedableRng;
-use rand_xoshiro::Xoshiro256StarStar;
 
 use std::cmp::{min, max};
 
-use flag_complex::{prelude::*, Graph};
+use flag_complex::{prelude::*};
 use flag_complex::{Node, Edge};
 
 use clap::Parser;
@@ -33,7 +31,7 @@ fn main() {
     let cxs: &'static _ = Box::leak(cxs);
 
     let mut threads = Vec::new();
-    for i in 0..100 {
+    for _ in 0..100 {
         let args = args.clone();
         let t = std::thread::spawn(move || doit(args, cxs));
         threads.push(t);
@@ -52,7 +50,7 @@ fn  doit(args: Args, cxs: &std::sync::Mutex::<std::collections::HashSet::<Vec<Ed
             let all_clique_count = count_all_cliques(&g);
             let mut st = State::new(g.clone());
             let mut success = false;
-            for i in 0..args.iteration_limit {
+            for _ in 0..args.iteration_limit {
                 let t = Transition::single_edge_flip(&st, &mut rng);
                 // for exact mode:
                 let mut cells_before = Vec::new();
