@@ -49,7 +49,6 @@ pub fn vec_setminus(xs: &Vec<Node>, ys: &Vec<Node>) -> Vec<Node> {
     return r;
 }
 
-// pub fn vec_max() {}
 
 pub fn all_le<T: PartialOrd> (a: &[T], b: &[T], z: &T) -> bool{
     let maxlen = std::cmp::max(a.len(), b.len());
@@ -73,6 +72,7 @@ pub fn factorial(x: usize) -> usize {
 
 pub fn binomial(n: usize, k:usize) -> usize{
     // quite unsafe and stupid. there are better methods, but not in stdlib
+    // works as long as n and k are small enough (like here)
     return factorial(n) / (factorial(k) * factorial(n-k))
 }
 
@@ -85,7 +85,10 @@ pub fn calc_relax_de(sc: &Vec<usize>) -> Vec<usize> {
             simplices_lost.push(OEIS_A058298[ind] - OEIS_A058298[ind-1]);
             ind += 1;
         }
-        let relax_de_a = simplices_lost.iter().max().unwrap();
+        dbg!(d);
+        dbg!(sc[d]);
+        dbg!(&simplices_lost);
+        let relax_de_a = simplices_lost.iter().max().unwrap_or(&1); //unwrap_or(&1) in case sc[d] ≤ 2
         let relax_de_b = factorial(d+1);
         relax_de.push(std::cmp::min(*relax_de_a, relax_de_b));
     }
