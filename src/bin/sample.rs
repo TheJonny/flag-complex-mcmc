@@ -9,11 +9,11 @@ use clap::Parser;
 
 // Advanced users may set hardcoded target/relaxed simplex counts boundaries here.
 // They overwrite target_relaxation command line option.
-const const_target_bounds:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![]};
-const const_relaxed_bounds:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![]};
+const TARGET_BOUNDS:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![]};
+const RELAXED_BOUNDS:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![]};
 
 // other stuff to tinker with: Obscure enough to not bother with command line options
-const const_move_distribution:[f64; 4] = [0.1, 0.1, 0.06, 0.2];
+const MOVE_DISTRIBUTION:[f64; 4] = [0.1, 0.1, 0.06, 0.2];
 
 
 /// MCMC sampler for flag complexes of a directed graph
@@ -78,20 +78,20 @@ fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
     dbg!(&adjusted_clique_order);
     let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
     
-    let target_bounds = if const_target_bounds.flag_count_min.len() == 0 || const_target_bounds.flag_count_max.len() == 0 {
+    let target_bounds = if TARGET_BOUNDS.flag_count_min.len() == 0 || TARGET_BOUNDS.flag_count_max.len() == 0 {
         let flag_count_min = st.flag_count.iter().enumerate().map(|(d, &scd)| if d < 2 {scd} else {(scd as f64 * (1. - args.target_relaxation)).floor() as usize}).collect();
         let flag_count_max = st.flag_count.iter().enumerate().map(|(d, &scd)| if d < 2 {scd} else {(scd as f64 * (1. + args.target_relaxation)).floor() as usize}).collect();
         Bounds{flag_count_min, flag_count_max}
     } else {
-        const_target_bounds
+        TARGET_BOUNDS
     };
-    let bounds = if const_relaxed_bounds.flag_count_min.len() == 0 || const_relaxed_bounds.flag_count_max.len() == 0 {
+    let bounds = if RELAXED_BOUNDS.flag_count_min.len() == 0 || RELAXED_BOUNDS.flag_count_max.len() == 0 {
         Bounds::calculate(&st, target_bounds.clone())
     } else {
-        const_relaxed_bounds
+        RELAXED_BOUNDS
     };
     println!("initial simplex count is {:?}, target_bounds are {target_bounds:?} and relaxed_bounds {bounds:?}", st.flag_count);
-    let move_distribution: WeightedIndex<f64> = WeightedIndex::new(const_move_distribution).unwrap();
+    let move_distribution: WeightedIndex<f64> = WeightedIndex::new(MOVE_DISTRIBUTION).unwrap();
     return MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: args.sample_distance, accepted: 0, sampled: 0, rng, bounds};
 }
 
