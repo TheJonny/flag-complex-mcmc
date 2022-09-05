@@ -37,7 +37,7 @@ pub struct State {
 impl State {
     pub fn new(graph: Graph) -> Self {
 
-        //println!("undirected maximal cliques");
+        println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
         let mut cliques_by_order = vec![];
         for c in cliques.clone() {
@@ -47,13 +47,12 @@ impl State {
             }
             cliques_by_order[clique_order-1].push(c);
         }
-        //println!("initial flagser");
+        println!("initial flagser");
         let flag_count = graph.flagser_count();
 
         println!("computing edge neighborhoods");
         let edge_neighborhood = compute_edge_neighborhoods(&graph);
         
-        //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
 
         State { graph, cliques_by_order, flag_count, edge_neighborhood}
     }
@@ -117,65 +116,42 @@ pub struct Bounds {
     pub flag_count_max: Vec<usize>,
 }
 impl Bounds {
-    pub fn calculate(initial: &State) -> Self {
-        // to determine the acceptance limits, we need to know, how much damage flipping any single edge
-        // can do (in each dimension).
-        // therefore we calculate the number of adjacent (not necessarly maximal) cliques...
+    pub fn calculate(initial: &State, target_bounds: Bounds) -> Self {
+        // see TODO:PAPER TODO
 
+        // Generate a normalized graph: Emulates having an undirected graph by having a total order
+        // on all the vertices. Then the directed simplices correspond 1:1 with the undirected
+        // simplices. This allows us to reuse flagser-code.
         let undirected_edges = initial.graph.undirected_edges();
         let mut normalized_graph = Graph::new_disconnected(initial.graph.nnodes());
         for &[a,b] in &undirected_edges {
             normalized_graph.add_edge(a, b);
         }
-
-        let mut nqliques_by_edge_and_dim = HashMap::<Edge, Vec<usize>>::with_capacity(undirected_edges.len());
-
-        let mut count_for_edges = |simplex: &[Node]| {
-            let dim = simplex.len() - 1;
-            // iterate over simplex's edges
-            for (i,&b) in simplex.iter().enumerate() {
-                for &a in &simplex[0..i] {
-                    assert!(a>b);
-                    let by_dim = nqliques_by_edge_and_dim.entry([a,b]).or_insert_with(Vec::new);
-                    if by_dim.len() <= dim {
-                        by_dim.resize(dim+1, 0);
-                    }
-                    by_dim[dim] += 1;
-                }
-            }
-        };
-        flag_complex::for_each_cell(&normalized_graph, &mut count_for_edges,0, normalized_graph.nnodes());
-
-        //  ... and compute the maximums by dimension
-        let mut max_by_dim = vec![];
-        for by_dim in nqliques_by_edge_and_dim.values() {
-            if max_by_dim.len() < by_dim.len() {
-                max_by_dim.resize(by_dim.len(), 0);
-            }
-            for (m, x) in max_by_dim.iter_mut().zip(by_dim) {
-                *m = max(*m, *x);
-            }
+        let ncliques =  normalized_graph.flagser_count();
+        println!("number of k-cliques: {ncliques:?}");
+        
+        // SEO-case: Just use ncliques as upper boundary
+        // See TODO:REF in the paper
+        if undirected_edges.len() == initial.flag_count[1] {
+            return Bounds{flag_count_min:target_bounds.flag_count_min, flag_count_max:ncliques}
         }
-        dbg!(&max_by_dim);
 
-        let additional_relax = 1.05; 
-        let mut flag_count_max: Vec<usize> = vec![];
-        let mut flag_count_min: Vec<usize> = vec![];
+        let mut flag_count_min = target_bounds.flag_count_min.clone();
+        let mut flag_count_max = target_bounds.flag_count_max.clone();
         let relax_de = crate::util::calc_relax_de(&initial.flag_count);
-        dbg!(&relax_de);
-        for d in 0..initial.flag_count.len() {
-            let relax : usize = (std::cmp::max(max_by_dim[d]*2, relax_de[d]))/2;
-            flag_count_max.push(((initial.flag_count[d] + 2*relax) as f64 * additional_relax) as usize);
-            flag_count_min.push(((initial.flag_count[d] - relax) as f64 / additional_relax) as usize);
+        //dbg!(&relax_de);
+        for d in 2..initial.flag_count.len() {
+            let denseness_factor = crate::util::binomial(initial.flag_count.len() - 2, d - 1); //TODO: refine further
+            //dbg!(denseness_factor);
+            let relax = relax_de[d] * denseness_factor;
+            //dbg!(relax);
+            flag_count_max[d] = std::cmp::max(flag_count_min[d] + relax, flag_count_max[d]);
+            flag_count_min[d] = std::cmp::min(flag_count_max[d] - relax, flag_count_min[d]);
         }
-        //flag_count_max.push(10); TODO: ADD SOMETHING LIKE THIS
+        flag_count_max[2] = usize::MAX; // can't hurt
+        flag_count_max.push(10); // can't hurt either
         println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &initial.flag_count, &flag_count_min, &flag_count_max);
 
-
-        let nchange_dims = max_by_dim.len().checked_sub(2).expect("there should be at least one edge!");
-
-        //for (m, f) in zip_longest(max_by_dim.iter(), 
-        // TODO: flag_count_max/min abhängig von max_by_dim
         Bounds { flag_count_min, flag_count_max}
     }
     pub fn check(&self, state: &State) -> bool {
