@@ -85,9 +85,6 @@ pub fn calc_relax_de(sc: &Vec<usize>) -> Vec<usize> {
             simplices_lost.push(OEIS_A058298[ind] - OEIS_A058298[ind-1]);
             ind += 1;
         }
-        dbg!(d);
-        dbg!(sc[d]);
-        dbg!(&simplices_lost);
         let relax_de_a = simplices_lost.iter().max().unwrap_or(&1); //unwrap_or(&1) in case sc[d] ≤ 2
         let relax_de_b = factorial(d+1);
         relax_de.push(std::cmp::min(*relax_de_a, relax_de_b));

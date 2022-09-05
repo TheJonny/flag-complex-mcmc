@@ -37,7 +37,7 @@ pub struct State {
 impl State {
     pub fn new(graph: Graph) -> Self {
 
-        println!("undirected maximal cliques");
+        println!("calculating undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
         let mut cliques_by_order = vec![];
         for c in cliques.clone() {
@@ -128,7 +128,7 @@ impl Bounds {
             normalized_graph.add_edge(a, b);
         }
         let ncliques =  normalized_graph.flagser_count();
-        println!("{ncliques:?}");
+        println!("number of k-cliques: {ncliques:?}");
         
         // SEO-case: Just use ncliques as upper boundary
         // See TODO:REF in the paper
