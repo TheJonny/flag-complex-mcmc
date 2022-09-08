@@ -12,6 +12,8 @@ use bincode;
 use hdf5;
 use ndarray;
 
+use crate::Edge;
+
 // Flag File
 pub fn read_flag_file<G: DirectedGraphNew>(fname:&str) -> G {
     let mut file = File::open(fname).expect("could not find .flag input file");
@@ -90,4 +92,35 @@ pub fn save_dot<G: DirectedGraph, W: std::io::Write>(writer: &mut W, graph:&G) -
     }
     writeln!(writer, "}}")?;
     Ok(())
+}
+
+pub fn load_graph_hdf5<G: DirectedGraphNew>(filename: &str, seed: u64, sample_number: u64) -> Result<G,Box<dyn std::error::Error>> {
+    let groupname = format!("/{seed:03}/{sample_number:06}/edgelist");
+    let h = hdf5::File::open(filename)?;
+    let ds = h.dataset(&groupname)?;
+    let arr = ds.read_2d()?;
+    let nedges = arr.nrows();
+    assert!(arr.ncols() == 2);
+    let nnodes = ds.attr("number_of_vertices")?.read_1d()?[0];
+    let mut g = G::new_disconnected(nnodes);
+    for i in 0 .. nedges {
+        let a = arr[(i,0)];
+        let b = arr[(i,1)];
+        g.add_edge(a, b);
+    }
+    return Ok(g);
+}
+
+pub fn load_edgelist_hdf5(filename: &str, groupname: &str) -> Result<Vec<Edge>, Box<dyn std::error::Error>> {
+    let h = hdf5::File::open(filename)?;
+    let arr = h.dataset(groupname)?.read_2d()?;
+    let n = arr.nrows();
+    assert!(arr.ncols() == 2);
+    let mut res = Vec::with_capacity(n);
+    for i in 0..n {
+        let a = arr[(i,0)];
+        let b = arr[(i,1)];
+        res.push([a, b]);
+    }
+    Ok(res)
 }
