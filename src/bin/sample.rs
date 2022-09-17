@@ -13,8 +13,8 @@ const TARGET_BOUNDS:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![
 const RELAXED_BOUNDS:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![]};
 
 // other stuff to tinker with: Obscure enough to not bother with command line options
-const MOVE_DISTRIBUTION:[f64; 4] = [0.5, 0.5, 0.0, 0.0];        //simple moves only
-//const MOVE_DISTRIBUTION:[f64; 4] = [0.1, 0.1, 0.6, 0.2];
+//const MOVE_DISTRIBUTION:[f64; 4] = [0.5, 0.5, 0.0, 0.0];        //simple moves only
+const MOVE_DISTRIBUTION:[f64; 4] = [0.1, 0.1, 0.6, 0.2];
 
 
 /// MCMC sampler for flag complexes of a directed graph
@@ -27,7 +27,7 @@ struct Args{
     input: String,
 
     /// target relaxation (percentage)
-    #[clap(short, long, default_value_t = 0.05)]
+    #[clap(short, long, default_value_t = 0.01)]
     target_relaxation: f64,
        
     /// number of samples to draw
