@@ -12,6 +12,19 @@ def join_graphs(a,b):
         [np.zeros(shape=(b.shape[0], a.shape[0])), b]
         ])
 
+def seoify(g):
+    '''Perform SearchEngineOptimization on the graph g by turning all double edges to single edges'''
+    (N,N) = g.shape
+    for i in range(N):
+        for j in range(N):
+            if g[i,j] == 1 and g[j,i] == 1:
+                if np.random.uniform() < 0.5:
+                    g[i,j] = 0
+                else:
+                    g[j,i] = 0
+    return g
+
+
 def save_unweighted_flag(fname, graph):
     assert(graph.shape[0] == graph.shape[1])
     N = graph.shape[0]

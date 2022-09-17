@@ -12,6 +12,8 @@ use bincode;
 use hdf5;
 use ndarray;
 
+use crate::Edge;
+
 // Flag File
 pub fn read_flag_file<G: DirectedGraphNew>(fname:&str) -> G {
     let mut file = File::open(fname).expect("could not find .flag input file");
@@ -65,7 +67,7 @@ pub fn save_to_hdf<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64,
     let file = hdf5::File::open_rw(format!("{state_store_dir}/{label}-{seed:03}.hdf5"))?;
     let groupname = format!("/{seed:03}/{sample_number:06}");
     if file.link_exists(&groupname) {
-        file.unlink(&groupname);
+        file.unlink(&groupname)?;
     }
     let group = file.create_group(&groupname)?;
     let builder = group.new_dataset_builder();
@@ -81,4 +83,44 @@ pub fn new_hdf_file(state_store_dir:&str, label:&str, seed:u64) -> hdf5::Result<
     hdf5::File::create(format!("{state_store_dir}/{label}-{seed:03}.hdf5"))?;
     //TODO: Add metadata/comment to this file
     return Ok(());
+}
+
+pub fn save_dot<G: DirectedGraph, W: std::io::Write>(writer: &mut W, graph:&G) -> std::io::Result<()> {
+    writeln!(writer, "digraph x {{")?;
+    for [a,b] in graph.edges() {
+        writeln!(writer, "{} -> {};", a, b)?;
+    }
+    writeln!(writer, "}}")?;
+    Ok(())
+}
+
+pub fn load_graph_hdf5<G: DirectedGraphNew>(filename: &str, seed: u64, sample_number: u64) -> Result<G,Box<dyn std::error::Error>> {
+    let groupname = format!("/{seed:03}/{sample_number:06}/edgelist");
+    let h = hdf5::File::open(filename)?;
+    let ds = h.dataset(&groupname)?;
+    let arr = ds.read_2d()?;
+    let nedges = arr.nrows();
+    assert!(arr.ncols() == 2);
+    let nnodes = ds.attr("number_of_vertices")?.read_1d()?[0];
+    let mut g = G::new_disconnected(nnodes);
+    for i in 0 .. nedges {
+        let a = arr[(i,0)];
+        let b = arr[(i,1)];
+        g.add_edge(a, b);
+    }
+    return Ok(g);
+}
+
+pub fn load_edgelist_hdf5(filename: &str, groupname: &str) -> Result<Vec<Edge>, Box<dyn std::error::Error>> {
+    let h = hdf5::File::open(filename)?;
+    let arr = h.dataset(groupname)?.read_2d()?;
+    let n = arr.nrows();
+    assert!(arr.ncols() == 2);
+    let mut res = Vec::with_capacity(n);
+    for i in 0..n {
+        let a = arr[(i,0)];
+        let b = arr[(i,1)];
+        res.push([a, b]);
+    }
+    Ok(res)
 }

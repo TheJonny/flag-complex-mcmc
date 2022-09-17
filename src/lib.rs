@@ -37,7 +37,7 @@ pub struct State {
 impl State {
     pub fn new(graph: Graph) -> Self {
 
-        println!("calculating undirected maximal cliques");
+        println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
         let mut cliques_by_order = vec![];
         for c in cliques.clone() {
@@ -205,7 +205,7 @@ pub struct Transition {
 
 impl Transition {
     pub fn random_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>, clique_order_distribution: &WeightedIndex<f64>) -> Self {
-        let potential_moves = [Transition::single_edge_flip, Transition::double_edge_move,
+        let potential_moves = [Transition::single_edge_flip_wrap, Transition::double_edge_move_wrap,
                                 Transition::clique_permute, Transition::clique_swap];
         let random_move = potential_moves[move_distribution.sample(rng)];
         return random_move(state, rng, clique_order_distribution);
@@ -289,7 +289,7 @@ impl Transition {
         return Transition{change_edges};
     }
 
-    pub fn single_edge_flip<R: Rng>(state: &State, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
+    pub fn single_edge_flip<R: Rng>(state: &State, rng: &mut R) -> Self {
         if let Some([from, to]) = state.graph.sample_edge(rng) {
             if !state.graph.has_edge(to, from) { // its a single edge
                 return Transition{change_edges: vec![([from,to], false), ([to,from], true)]};
@@ -297,8 +297,11 @@ impl Transition {
         }
         return Transition{change_edges: vec![]};
     }
+    fn single_edge_flip_wrap<R: Rng>(state: &State, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
+        Self::single_edge_flip(state, rng)
+    }
     
-    pub fn double_edge_move<R: Rng>(state: &State, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
+    pub fn double_edge_move<R: Rng>(state: &State, rng: &mut R) -> Self {
         // if there is no edge, return an empty transition below
         if let Some(double_edge) = state.graph.sample_double_edge(rng) {
             // FIXME: assert somewhere, that there are single edges.
@@ -319,6 +322,9 @@ impl Transition {
             return Transition { change_edges: vec![([b,a], true), (delme, false)] }
         }
         return Transition{change_edges: vec![]};
+    }
+    fn double_edge_move_wrap<R: Rng>(state: &State, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
+        Self::double_edge_move(state, rng)
     }
 }
 /// for every edge, this gathers the nodes that are connected to both ends.
