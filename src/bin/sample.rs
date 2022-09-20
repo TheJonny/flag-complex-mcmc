@@ -13,7 +13,7 @@ const TARGET_BOUNDS:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![
 const RELAXED_BOUNDS:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![]};
 
 // other stuff to tinker with: Obscure enough to not bother with command line options
-//const MOVE_DISTRIBUTION:[f64; 4] = [0.5, 0.5, 0.0, 0.0];        //simple moves only
+const MOVE_DISTRIBUTION_SIMPLE:[f64; 4] = [0.5, 0.5, 0.0, 0.0];        //simple moves only
 const MOVE_DISTRIBUTION:[f64; 4] = [0.1, 0.1, 0.6, 0.2];
 
 
@@ -70,6 +70,10 @@ struct Args{
     /// save output as edge list bit array instead of hdf5
     #[clap(long)]
     save_bits: bool,
+
+    /// only use simple single edge flips and double edge moves
+    simple: bool,
+
 }
 
 fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
@@ -93,7 +97,7 @@ fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
     } else {
         RELAXED_BOUNDS
     };
-    let move_distribution: WeightedIndex<f64> = WeightedIndex::new(MOVE_DISTRIBUTION).unwrap();
+    let move_distribution: WeightedIndex<f64> = WeightedIndex::new(if args.simple { MOVE_DISTRIBUTION_SIMPLE} else { MOVE_DISTRIBUTION }).unwrap();
     let sample_distance = if args.sample_distance == 0 {2*st.flag_count[1]} else {args.sample_distance};
     return MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: sample_distance, accepted: 0, sampled: 0, rng, bounds};
 }
