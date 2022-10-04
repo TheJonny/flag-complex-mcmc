@@ -186,6 +186,7 @@ impl BitOutput {
                 bit = bit.rotate_left(1);
                 if bit == 1 {
                     f.write(&[byte])?;
+                    byte = 0;
                 }
             }
             if bit != 1 {

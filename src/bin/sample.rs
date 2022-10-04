@@ -72,6 +72,7 @@ struct Args{
     save_bits: bool,
 
     /// only use simple single edge flips and double edge moves
+    #[clap(long)]
     simple: bool,
 
 }
