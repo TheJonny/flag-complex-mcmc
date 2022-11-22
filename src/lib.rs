@@ -59,8 +59,8 @@ impl State {
 
     /// applies transition, returns the change in simplex counts
     pub fn apply_transition(&mut self, t: &Transition) -> (Vec<usize>, Vec<usize>) {
-        let nei = self.edgeset_neighborhood(&t.change_edges.iter().map(|&([a,b], _)| [max(a,b), min(a,b)]).collect::<Vec<Edge>>());
-        let pre = Graph::subgraph(&self.graph, &nei).flagser_count();
+        let nbhd = self.edgeset_neighborhood(&t.change_edges.iter().map(|&([a,b], _)| [max(a,b), min(a,b)]).collect::<Vec<Edge>>());
+        let pre = Graph::subgraph(&self.graph, &nbhd).flagser_count();
         for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
             assert!(*s >= *p);
             *s -= *p;
@@ -68,7 +68,7 @@ impl State {
         for &([a,b],add) in &t.change_edges {
             self.graph.set_edge(a, b, add);
         }
-        let post = Graph::subgraph(&self.graph, &nei).flagser_count();
+        let post = Graph::subgraph(&self.graph, &nbhd).flagser_count();
         if post.len() > self.flag_count.len() {
             self.flag_count.resize(post.len(), 0);
         }
