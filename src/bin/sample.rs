@@ -99,7 +99,7 @@ fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
         RELAXED_BOUNDS
     };
     let move_distribution: WeightedIndex<f64> = WeightedIndex::new(if args.simple { MOVE_DISTRIBUTION_SIMPLE} else { MOVE_DISTRIBUTION }).unwrap();
-    let sample_distance = if args.sample_distance == 0 {2*st.flag_count[1]} else {args.sample_distance};
+    let sample_distance = if args.sample_distance == 0 {(2. * st.flag_count[1] as f64 * (st.flag_count[1] as f64).log2()).ceil() as usize} else {args.sample_distance};
     return MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: sample_distance, accepted: 0, sampled: 0, rng, bounds};
 }
 
