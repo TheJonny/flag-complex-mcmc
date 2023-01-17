@@ -32,7 +32,7 @@ for other features, call
 
 
 ### ToDo
-- [ ] merge branches
+- [x] merge branches
 - [ ] update readme
 - [ ] decouple sampling distance from state saving interval
 - [ ] save sampling distance, command line parameters, git commit hash etc in .hdf5 output file

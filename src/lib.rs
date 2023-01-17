@@ -150,7 +150,7 @@ impl Bounds {
         }
         flag_count_max[2] = usize::MAX; // can't hurt
         flag_count_max.push(10); // can't hurt either
-        println!("We have {:?},\n lower limit {:?},\n upper limit {:?}\n", &initial.flag_count, &flag_count_min, &flag_count_max);
+        println!("The simplex counts and boundaries are:\n  s^--: {:?},\n   s^-: {:?},\n  s(G): {:?},\n   s^+: {:?},\n  s^++: {:?}.", &flag_count_min, &target_bounds.flag_count_min, &initial.flag_count, &target_bounds.flag_count_max, &flag_count_max);
 
         Bounds { flag_count_min, flag_count_max}
     }

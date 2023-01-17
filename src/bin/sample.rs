@@ -13,7 +13,7 @@ const TARGET_BOUNDS:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![
 const RELAXED_BOUNDS:Bounds =  Bounds{flag_count_min:vec![], flag_count_max:vec![]};
 
 // other stuff to tinker with: Obscure enough to not bother with command line options
-//const MOVE_DISTRIBUTION:[f64; 4] = [0.5, 0.5, 0.0, 0.0];        //simple moves only
+const MOVE_DISTRIBUTION_SIMPLE:[f64; 4] = [0.5, 0.5, 0.0, 0.0];        //simple moves only
 const MOVE_DISTRIBUTION:[f64; 4] = [0.1, 0.1, 0.6, 0.2];
 
 
@@ -66,6 +66,15 @@ struct Args{
     /// state_save_interval: Interval in which to save states
     #[clap(long, default_value_t = 100)]
     state_save_interval: usize,
+
+    /// save output as edge list bit array instead of hdf5
+    #[clap(long)]
+    save_bits: bool,
+
+    /// only use simple single edge flips and double edge moves
+    #[clap(long)]
+    simple: bool,
+
 }
 
 fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
@@ -89,8 +98,9 @@ fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
     } else {
         RELAXED_BOUNDS
     };
-    let move_distribution: WeightedIndex<f64> = WeightedIndex::new(MOVE_DISTRIBUTION).unwrap();
-    let sample_distance = if args.sample_distance == 0 {2*st.flag_count[1]} else {args.sample_distance};
+    let move_distribution: WeightedIndex<f64> = WeightedIndex::new(if args.simple { MOVE_DISTRIBUTION_SIMPLE} else { MOVE_DISTRIBUTION }).unwrap();
+    let sample_distance = if args.sample_distance == 0 {(2. * st.flag_count[1] as f64 * (st.flag_count[1] as f64).log2()).ceil() as usize} else {args.sample_distance};
+    println!("The sampling distance was set to {sample_distance}.");
     return MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: sample_distance, accepted: 0, sampled: 0, rng, bounds};
 }
 
@@ -98,13 +108,22 @@ fn main() {
     let args = Args::parse();
     fs::create_dir_all(&args.state_store_dir).expect("could not create state storage directory");
     fs::create_dir_all(&args.samples_store_dir).expect("could not create samples storage directory");
+
+    let save_hdf5: bool = ! args.save_bits;
     
     let (sample_index_start, mut sampler) = if !args.continue_from.is_empty() {
         io::load_state(&args.continue_from).expect("unable to load state")
     } else {
-        io::new_hdf_file(&args.samples_store_dir, &args.label, args.seed).unwrap();
+        if save_hdf5 {
+            io::new_hdf_file(&args.samples_store_dir, &args.label, args.seed).unwrap();
+        }
         (0, initialize_new_sampler(&args))
     };
+
+    let mut bit_output: Option<io::BitOutput> = if args.save_bits {
+        Some(io::BitOutput::new(&sampler.state.graph, &format!("{}/{}-{:03}", args.samples_store_dir, args.label, args.seed)).unwrap())
+    } else { None };
+
     let sample_index_end = sample_index_start + args.number_of_samples;
     for i in sample_index_start..sample_index_end {
         if (i % args.state_save_interval) == 0 {
@@ -112,7 +131,12 @@ fn main() {
             io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), i, &sampler).unwrap();
         }
         let s = sampler.next();
-        io::save_to_hdf(&args.samples_store_dir, &args.label, args.seed, i, &s.graph, &s.flag_count).unwrap();
+        if save_hdf5 {
+            io::save_to_hdf(&args.samples_store_dir, &args.label, args.seed, i, &s.graph, &s.flag_count).unwrap();
+        }
+        if let Some(out) = bit_output.as_mut() {
+            out.save(&s.graph).unwrap();
+        }
 
         println!("flag count: {:?}", s.flag_count);
         drop(s);

@@ -124,3 +124,89 @@ pub fn load_edgelist_hdf5(filename: &str, groupname: &str) -> Result<Vec<Edge>, 
     }
     Ok(res)
 }
+
+pub struct BitOutput {
+    edges: Vec<Edge>,
+    chunk_size: usize,
+    index_in_file: usize,
+    index_in_dir: usize,
+    current_file: Option<std::io::BufWriter<std::fs::File>>,
+    dir: String,
+}
+
+impl BitOutput {
+    pub fn new<G: DirectedGraph>(graph: &G, dir: &str) -> std::io::Result<Self> {
+        let res = std::fs::create_dir(dir);
+        match res {
+            Ok(_) => {
+                // ok
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // ok
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+        save_flag_file(&format!("{}/{}", dir, "graph.flag"), graph)?;
+        let mut edges = graph.edges();
+        for i in 0..edges.len() {
+            let [a,b] = edges[i];
+            edges.push([b,a]);
+        }
+        use std::cmp::{min, max};
+        edges.sort_unstable_by_key(|&[a,b]| (max(a,b), min(a,b), a < b));
+        edges.dedup();
+        Ok(BitOutput {
+            chunk_size: max(2_000_000_000 / (edges.len()/8), 1),
+            edges,
+            index_in_dir: 0,
+            index_in_file: 0,
+            current_file: None,
+            dir: dir.to_owned(),
+        })
+    }
+    pub fn save<G: DirectedGraph>(&mut self, graph: &G) -> std::io::Result<()> {
+        // open file
+        if self.index_in_file == 0 {
+            assert!(self.current_file.is_none());
+            let f = std::fs::File::create(&format!("{}/{}.edgebits", self.dir, self.index_in_dir))?;
+            let b = std::io::BufWriter::new(f);
+            self.current_file = Some(b);
+        }
+        // write graph
+        {
+            let f = self.current_file.as_mut().unwrap();
+            let mut bit: u8 = 1;
+            let mut byte = 0;
+            for &[a,b] in &self.edges {
+                if graph.has_edge(a, b) {
+                    byte |= bit;
+                }
+                bit = bit.rotate_left(1);
+                if bit == 1 {
+                    f.write(&[byte])?;
+                    byte = 0;
+                }
+            }
+            if bit != 1 {
+                f.write(&[byte])?;
+            }
+            self.index_in_file += 1;
+        }
+        // close file
+        if self.index_in_file == self.chunk_size {
+            let mut f = self.current_file.take().unwrap();
+            f.flush()?;
+            self.index_in_file = 0;
+            self.index_in_dir += 1;
+        }
+        Ok(())
+    }
+    pub fn flush(&mut self) -> std::io::Result<()> {
+        if let Some(f) = self.current_file.as_mut() {
+            f.flush()?;
+        }
+        Ok(())
+    }
+}
