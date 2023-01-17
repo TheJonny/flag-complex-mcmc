@@ -39,5 +39,5 @@ for other features, call
 - [ ] split state into precomputed "non"-state and actual thread-dependent state
   - [ ] ensure deterministic precomputed non-state or check for file existence
   - [ ] add command line parameters for different dirs
-- [ ] enhance clo-parsing to take care of list of seeds
+- [x] enhance clo-parsing to take care of list of seeds
 - [ ] clean sample.rs
