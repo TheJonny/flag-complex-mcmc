@@ -33,6 +33,7 @@ for other features, call
 
 ### ToDo
 - [ ] merge branches
+- [ ] update readme
 - [ ] decouple sampling distance from state saving interval
 - [ ] save sampling distance, command line parameters, git commit hash etc in .hdf5 output file
 - [ ] split state into precomputed "non"-state and actual thread-dependent state
