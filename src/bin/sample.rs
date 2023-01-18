@@ -34,6 +34,9 @@ struct Args{
     #[clap(short, long, default_value_t = 1000)]
     number_of_samples: usize,
 
+    /// only use simple single edge flips and double edge moves
+    #[clap(long)]
+    simple: bool,
 
     // Sampler configuration: Technical
     /// short human-readable label for reference
@@ -43,6 +46,13 @@ struct Args{
     /// random seed 
     #[clap(short, long, default_value_t = 0)]
     seed: u64,
+
+    /// Give seeds to seed the RNG in a comma-separated list.
+    /// Each seed starts a separate chain in a seperate thread with a separate RNG.
+    /// Usage example: --seeds=0,1,2,3,5 or --seeds=$(seq -s, 1 5) .
+    /// Defaults to one seed which is 0.
+    #[clap(short, long, use_value_delimiter = true, value_delimiter = ',', default_value = "0")]
+    seeds: Vec<u64>,
 
     /// sample_distance: number of steps between too samples
     #[clap(long, default_value_t = 0)]
@@ -70,10 +80,6 @@ struct Args{
     /// save output as edge list bit array instead of hdf5
     #[clap(long)]
     save_bits: bool,
-
-    /// only use simple single edge flips and double edge moves
-    #[clap(long)]
-    simple: bool,
 
 }
 
@@ -106,6 +112,7 @@ fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
 
 fn main() {
     let args = Args::parse();
+    println!("{:?}", &args.seeds);
     fs::create_dir_all(&args.state_store_dir).expect("could not create state storage directory");
     fs::create_dir_all(&args.samples_store_dir).expect("could not create samples storage directory");
 
