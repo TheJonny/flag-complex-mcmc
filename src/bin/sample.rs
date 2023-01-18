@@ -83,14 +83,14 @@ struct Args{
 
 }
 
-fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
+fn initialize_new(args: &Args) -> (Parameters, Precomputed, MCMCSampler<Xoshiro256StarStar>) {
     let g = io::read_flag_file(&args.input);
 
-    let st = State::new(g);
+    let st = MarkovState::new(g);
+    let precomputed = Precomputed::new(&st.graph);
 
-    println!("we have the following number of maximal k-cliques {:?}", st.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
-    let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
-    let adjusted_clique_order = st.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
+    println!("we have the following number of maximal k-cliques {:?}", precomputed.cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
+    let adjusted_clique_order = precomputed.cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
     let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
     let target_bounds = if TARGET_BOUNDS.flag_count_min.len() == 0 || TARGET_BOUNDS.flag_count_max.len() == 0 {
         let flag_count_min = st.flag_count.iter().enumerate().map(|(d, &scd)| if d < 2 {scd} else {(scd as f64 * (1. - args.target_relaxation)).floor() as usize}).collect();
@@ -107,7 +107,10 @@ fn initialize_new_sampler(args: &Args) -> MCMCSampler<Xoshiro256StarStar> {
     let move_distribution: WeightedIndex<f64> = WeightedIndex::new(if args.simple { MOVE_DISTRIBUTION_SIMPLE} else { MOVE_DISTRIBUTION }).unwrap();
     let sample_distance = if args.sample_distance == 0 {(2. * st.flag_count[1] as f64 * (st.flag_count[1] as f64).log2()).ceil() as usize} else {args.sample_distance};
     println!("The sampling distance was set to {sample_distance}.");
-    return MCMCSampler{state: st, move_distribution, clique_order_distribution, sample_distance: sample_distance, accepted: 0, sampled: 0, rng, bounds};
+    let parameters = Parameters {
+        bounds, move_distribution, clique_order_distribution, sample_distance
+    };
+    return (parameters, precomputed, st);
 }
 
 fn main() {
@@ -122,34 +125,57 @@ fn main() {
         io::load_state(&args.continue_from).expect("unable to load state")
     } else {
         if save_hdf5 {
-            io::new_hdf_file(&args.samples_store_dir, &args.label, args.seed).unwrap();
         }
         (0, initialize_new_sampler(&args))
     };
 
-    let mut bit_output: Option<io::BitOutput> = if args.save_bits {
-        Some(io::BitOutput::new(&sampler.state.graph, &format!("{}/{}-{:03}", args.samples_store_dir, args.label, args.seed)).unwrap())
-    } else { None };
-
-    let sample_index_end = sample_index_start + args.number_of_samples;
-    for i in sample_index_start..sample_index_end {
-        if (i % args.state_save_interval) == 0 {
-            println!("saving state in step {i}");
-            io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), i, &sampler).unwrap();
+    let precomputed: Precomputed;
+    let parameters: Parameters;
+    let samplers : Vec<MCMCSampler>;
+    if args.resume {
+        (precomputed, parameters) = io::load_shared(&args.state_dir, &args.label);
+        samplers = args.seeds
+            .map(|&seed| io::load_state(&args.state_dir, &args.label, seed).expect("unable to load state"))
+            .collect();
+    } else {
+        let start_state;
+        (parameters, precomputed, start_state) = initialize_new(&args);
+        io::save_shared(&args.state_dir, &args.label, &parameters, &precomputed);
+        for &seed in &args.seeds {
+                io::new_hdf_file(&args.samples_store_dir, &args.label, seed, &start_state.graph).unwrap();
         }
-        let s = sampler.next();
-        if save_hdf5 {
-            io::save_to_hdf(&args.samples_store_dir, &args.label, args.seed, i, &s.graph, &s.flag_count).unwrap();
-        }
-        if let Some(out) = bit_output.as_mut() {
-            out.save(&s.graph).unwrap();
-        }
-
-        println!("flag count: {:?}", s.flag_count);
-        drop(s);
-        dbg!(sampler.acceptance_ratio());
+        samplers = args.seeds
+            .map(|&seed| {
+                let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
+                MCMCSampler::new(start_state.clone(), rng, &parameters, &precomputed)
+            })
+            .collect();
     }
 
-    io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), sample_index_end, &sampler).unwrap();
+    //let mut bit_output: Option<io::BitOutput> = if args.save_bits {
+    //    Some(io::BitOutput::new(&sampler.state.graph, &format!("{}/{}-{:03}", args.samples_store_dir, args.label, args.seed)).unwrap())
+    //} else { None };
+    std::thread::scope(|scope| {
+        for sampler in samplers {
+            scope.spawn(||{
+                // run the sampler for args.number_of_stamples steps.
+                // save state
+                loop {
+                    let s = sampler.step();
+                    if sampler.step_number() % parameters.state_save_distance == 0 {
+                        println!("saving state in step {}", sampler.step_number());
+                        io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=args.seed), output_index, &sampler).unwrap();
+                        // save state
+                    }
+                    if sampler.step_number % parameters.sample_distance == 0 {
+                        let output_index = sampler.step_number() / parameters.sample_distance
+                        // write output
+                        println!("flag count: {:?}", s.flag_count);
+                        dbg!(sampler.acceptance_ratio());
+                        io::save_to_hdf(&args.samples_store_dir, &args.label, args.seed, output_index, &s.graph, &s.flag_count).unwrap();
+                    }
+                }
+            });
+        }
+    });
 }
-

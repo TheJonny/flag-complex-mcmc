@@ -185,8 +185,8 @@ struct Variables<R> {
     pub state: MarkovState,
     
     // Metrics
-    pub sampled: usize,
-    pub accepted: usize,
+    pub sampled: u64,
+    pub accepted: u64,
 }
 
 #[derive(Debug)]
@@ -206,20 +206,21 @@ impl<'pa, 'pc,  R: Rng> MCMCSampler<'pa, 'pc, R> {
             precomputed
         }
     }
-    pub fn next(&mut self) -> &MarkovState{
-        for _ in 0..self.parameters.sample_distance {
-            let t = Transition::random_move(&self.vars.state, &self.precomputed, &mut self.vars.rng, &self.parameters.move_distribution, &self.parameters.clique_order_distribution);
-            let counters = apply_transition(&mut self.vars.state, &t, self.precomputed);
-            self.vars.sampled += 1;
-            if self.parameters.bounds.check(&self.vars.state) {
-                self.vars.accepted += 1;
-            }
-            else {
-                revert_transition(&mut self.vars.state, &t, &counters);
-            }
+    pub fn step(&mut self) -> &MarkovState{
+        let t = Transition::random_move(&self.vars.state, &self.precomputed, &mut self.vars.rng, &self.parameters.move_distribution, &self.parameters.clique_order_distribution);
+        let counters = apply_transition(&mut self.vars.state, &t, self.precomputed);
+        self.vars.sampled += 1;
+        if self.parameters.bounds.check(&self.vars.state) {
+            self.vars.accepted += 1;
+        }
+        else {
+            revert_transition(&mut self.vars.state, &t, &counters);
         }
         return &self.vars.state;
     }
+
+    pub const fn step_number(&self) -> u64 { self.vars.sampled }
+
     pub fn acceptance_ratio(&self) -> f64 {
         return self.vars.accepted as f64 / self.vars.sampled as f64;
     }
