@@ -42,5 +42,5 @@ for other features, call
 - [x] enhance clo-parsing to take care of list of seeds
 - [ ] clean sample.rs
 - [ ] split normal run and resume
-  - [ ] `--resume` conflicts with everything except `--label`, `--seeds`, `--state_save_dir`
+  - [x] `--resume` conflicts with everything except `--label`, `--seeds`, `--state_save_dir`
   - [ ] normal run should save everything into state
