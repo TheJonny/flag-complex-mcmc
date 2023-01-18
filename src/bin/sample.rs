@@ -43,7 +43,7 @@ struct Args{
     #[clap(short, long)]
     label: String,
 
-    /// random seed 
+    /// random seed TODO:REMOVE
     #[clap(short, long, default_value_t = 0)]
     seed: u64,
 
@@ -62,8 +62,15 @@ struct Args{
     // Caching, saving, restoring
     /// continue: load given serde file and continue from there.
     /// Takes precedence over almost all other options if present.
-    #[clap(short, long, default_value = "")]
-    continue_from: String,
+    #[clap(short, long, default_value_t = false, conflicts_with_all(&[
+                                                    "input",
+                                                    "target_relaxation",
+                                                    "simple",
+                                                    //"save_bits",
+                                                    "sample_distance",
+                                                    "state_save_interval",
+                                                    ]))]
+    resume: bool,
 
     /// samples_store_dir: directory where to store hdf5 files with samples
     #[clap(long, default_value = "./samples/")]
