@@ -22,6 +22,7 @@ ndarray = "*"
 bincode = "*"
 rand_xoshiro = { version = "*", features = ['serde1'] }
 serde = { version = "1.0", features = ["derive"] }
+anyhow = "*"
 
 flag-complex = { git = "https://github.com/TheJonny/flag-complex" }
 

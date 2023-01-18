@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use rand;
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 use rayon::prelude::*;
 
@@ -27,15 +27,29 @@ pub struct EdgeInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct State {
-    pub cliques_by_order: Vec<Vec<Vec<Node>>>,
-    pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
+pub struct MarkovState {
     pub graph: Graph,
     pub flag_count: Vec<usize>,
 }
 
-impl State {
+
+impl MarkovState {
     pub fn new(graph: Graph) -> Self {
+        let flag_count = graph.flagser_count();
+        MarkovState { graph, flag_count}
+    }
+
+
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Precomputed {
+    pub cliques_by_order: Vec<Vec<Vec<Node>>>,
+    pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
+}
+
+impl Precomputed {
+    pub fn new(graph: &Graph) -> Self {
 
         println!("undirected maximal cliques");
         let cliques = graph.compute_maximal_cliques();
@@ -47,54 +61,12 @@ impl State {
             }
             cliques_by_order[clique_order-1].push(c);
         }
-        println!("initial flagser");
-        let flag_count = graph.flagser_count();
 
         println!("computing edge neighborhoods");
-        let edge_neighborhood = compute_edge_neighborhoods(&graph);
-        
+        let edge_neighborhood = compute_edge_neighborhoods(graph);
 
-        State { graph, cliques_by_order, flag_count, edge_neighborhood}
+        Precomputed { cliques_by_order, edge_neighborhood}
     }
-
-    /// applies transition, returns the change in simplex counts
-    pub fn apply_transition(&mut self, t: &Transition) -> (Vec<usize>, Vec<usize>) {
-        let nbhd = self.edgeset_neighborhood(&t.change_edges.iter().map(|&([a,b], _)| [max(a,b), min(a,b)]).collect::<Vec<Edge>>());
-        let pre = Graph::subgraph(&self.graph, &nbhd).flagser_count();
-        for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
-            assert!(*s >= *p);
-            *s -= *p;
-        }
-        for &([a,b],add) in &t.change_edges {
-            self.graph.set_edge(a, b, add);
-        }
-        let post = Graph::subgraph(&self.graph, &nbhd).flagser_count();
-        if post.len() > self.flag_count.len() {
-            self.flag_count.resize(post.len(), 0);
-        }
-        for (p,s) in post.iter().zip(self.flag_count.iter_mut()) {
-            *s += *p;
-        }
-        return (pre, post);
-    }
-
-    pub fn revert_transition(&mut self, t: &Transition, &(ref pre, ref post): &(Vec<usize>, Vec<usize>)) {
-        for &([a,b],add) in &t.change_edges {
-            self.graph.set_edge(a, b, !add);
-        }
-        for (p,s) in post.iter().zip(self.flag_count.iter_mut()) {
-            assert!(*s >= *p);
-            *s -= *p;
-        }
-        if pre.len() > self.flag_count.len() {
-            self.flag_count.resize(pre.len(), 0);
-        }
-        for (p,s) in pre.iter().zip(self.flag_count.iter_mut()) {
-            *s += *p;
-        }
-    }
-
-
 
     pub fn edgeset_neighborhood(&self, edges: &[Edge]) -> Vec<Node>{
         let mut affected_vertices = vec![];
@@ -110,13 +82,51 @@ impl State {
         return affected_vertices;
     }
 }
+
+/// applies transition, returns the change in simplex counts
+pub fn apply_transition(state: &mut MarkovState, t: &Transition, precomputed: &Precomputed) -> (Vec<usize>, Vec<usize>) {
+    let nbhd = precomputed.edgeset_neighborhood(&t.change_edges.iter().map(|&([a,b], _)| [max(a,b), min(a,b)]).collect::<Vec<Edge>>());
+    let pre = Graph::subgraph(&state.graph, &nbhd).flagser_count();
+    for (p,s) in pre.iter().zip(state.flag_count.iter_mut()) {
+        assert!(*s >= *p);
+        *s -= *p;
+    }
+    for &([a,b],add) in &t.change_edges {
+        state.graph.set_edge(a, b, add);
+    }
+    let post = Graph::subgraph(&state.graph, &nbhd).flagser_count();
+    if post.len() > state.flag_count.len() {
+        state.flag_count.resize(post.len(), 0);
+    }
+    for (p,s) in post.iter().zip(state.flag_count.iter_mut()) {
+        *s += *p;
+    }
+    return (pre, post);
+}
+
+pub fn revert_transition(state: &mut MarkovState, t: &Transition, &(ref pre, ref post): &(Vec<usize>, Vec<usize>)) {
+    for &([a,b],add) in &t.change_edges {
+        state.graph.set_edge(a, b, !add);
+    }
+    for (p,s) in post.iter().zip(state.flag_count.iter_mut()) {
+        assert!(*s >= *p);
+        *s -= *p;
+    }
+    if pre.len() > state.flag_count.len() {
+        state.flag_count.resize(pre.len(), 0);
+    }
+    for (p,s) in pre.iter().zip(state.flag_count.iter_mut()) {
+        *s += *p;
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Bounds {
     pub flag_count_min: Vec<usize>,
     pub flag_count_max: Vec<usize>,
 }
 impl Bounds {
-    pub fn calculate(initial: &State, target_bounds: Bounds) -> Self {
+    pub fn calculate(initial: &MarkovState, target_bounds: Bounds) -> Self {
         // see TODO:PAPER TODO
 
         // Generate a normalized graph: Emulates having an undirected graph by having a total order
@@ -154,46 +164,79 @@ impl Bounds {
 
         Bounds { flag_count_min, flag_count_max}
     }
-    pub fn check(&self, state: &State) -> bool {
+    pub fn check(&self, state: &MarkovState) -> bool {
         return all_le(&self.flag_count_min, &state.flag_count, &0)
             && all_le(&state.flag_count, &self.flag_count_max, &0);
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MCMCSampler<R: Rng> {
-    // Variable State
-    pub rng: R,
-    pub state: State,
-
-    // Settings
+pub struct Parameters {
     pub bounds: Bounds,
     pub move_distribution: WeightedIndex<f64>,
     pub clique_order_distribution: WeightedIndex<f64>,
     pub sample_distance: usize,
+}
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Variables<R> {
+    // Variable State
+    pub rng: R,
+    pub state: MarkovState,
+    
     // Metrics
     pub sampled: usize,
     pub accepted: usize,
 }
 
-impl<R: Rng> MCMCSampler<R> {
-    pub fn next(&mut self) -> &State{
-        for _ in 0..self.sample_distance {
-            let t = Transition::random_move(&self.state, &mut self.rng, &self.move_distribution, &self.clique_order_distribution);
-            let counters = self.state.apply_transition(&t);
-            self.sampled += 1;
-            if self.bounds.check(&self.state) {
-                self.accepted += 1;
+#[derive(Debug)]
+pub struct MCMCSampler<'pa, 'pc, R> {
+    parameters: &'pa Parameters,
+    precomputed: &'pc Precomputed,
+    vars: Variables<R>,
+}
+
+impl<'pa, 'pc,  R: Rng> MCMCSampler<'pa, 'pc, R> {
+    pub fn new(state: MarkovState, rng: R, parameters: &'pa Parameters, precomputed: &'pc Precomputed) ->
+                MCMCSampler<'pa, 'pc, R>
+    {
+        MCMCSampler {
+            vars: Variables {state, rng, sampled: 0, accepted: 0},
+            parameters,
+            precomputed
+        }
+    }
+    pub fn next(&mut self) -> &MarkovState{
+        for _ in 0..self.parameters.sample_distance {
+            let t = Transition::random_move(&self.vars.state, &self.precomputed, &mut self.vars.rng, &self.parameters.move_distribution, &self.parameters.clique_order_distribution);
+            let counters = apply_transition(&mut self.vars.state, &t, self.precomputed);
+            self.vars.sampled += 1;
+            if self.parameters.bounds.check(&self.vars.state) {
+                self.vars.accepted += 1;
             }
             else {
-                self.state.revert_transition(&t, &counters);
+                revert_transition(&mut self.vars.state, &t, &counters);
             }
         }
-        return &self.state;
+        return &self.vars.state;
     }
     pub fn acceptance_ratio(&self) -> f64 {
-        return self.accepted as f64 / self.sampled as f64;
+        return self.vars.accepted as f64 / self.vars.sampled as f64;
+    }
+}
+impl<'pa, 'pc,  R: Serialize> MCMCSampler<'pa, 'pc, R> {
+    pub fn save<W: std::io::Write>(&self, w: W) -> anyhow::Result<()>{
+        bincode::serialize_into(w, &self.vars)?;
+        Ok(())
+    }
+}
+
+impl<'pa, 'pc,  R: DeserializeOwned> MCMCSampler<'pa, 'pc, R> {
+    pub fn load<Source: std::io::Read>(source: Source, parameters: &'pa Parameters, precomputed: &'pc Precomputed) ->
+        anyhow::Result<Self>
+    {
+        let vars = bincode::deserialize_from(source)?;
+        Ok(MCMCSampler {vars, parameters, precomputed})
     }
 }
 
@@ -204,15 +247,15 @@ pub struct Transition {
 }
 
 impl Transition {
-    pub fn random_move<R: Rng>(state: &State, rng: &mut R, move_distribution: &WeightedIndex<f64>, clique_order_distribution: &WeightedIndex<f64>) -> Self {
+    pub fn random_move<R: Rng>(state: &MarkovState, precomputed: &Precomputed, rng: &mut R, move_distribution: &WeightedIndex<f64>, clique_order_distribution: &WeightedIndex<f64>) -> Self {
         let potential_moves = [Transition::single_edge_flip_wrap, Transition::double_edge_move_wrap,
                                 Transition::clique_permute, Transition::clique_swap];
-        let random_move = potential_moves[move_distribution.sample(rng)];
-        return random_move(state, rng, clique_order_distribution);
+        let chosen_move = potential_moves[move_distribution.sample(rng)];
+        return chosen_move(state, precomputed, rng, clique_order_distribution);
     }
 
-    pub fn clique_permute<R: Rng>(state: &State, rng: &mut R, clique_order_distribution: &WeightedIndex<f64>) -> Self {
-        let cliques_of_fixed_order = &state.cliques_by_order[clique_order_distribution.sample(rng)];
+    pub fn clique_permute<R: Rng>(state: &MarkovState, precomputed: &Precomputed, rng: &mut R, clique_order_distribution: &WeightedIndex<f64>) -> Self {
+        let cliques_of_fixed_order = &precomputed.cliques_by_order[clique_order_distribution.sample(rng)];
         let cl = cliques_of_fixed_order.choose(rng).unwrap();
 
         let perm = random_perm(0,cl.len(), rng);
@@ -231,8 +274,8 @@ impl Transition {
         return Transition {change_edges};
     }
 
-    pub fn clique_swap<R: Rng>(state: &State, rng: &mut R, clique_order_distribution: &WeightedIndex<f64>) -> Self {
-        let cliques_of_fixed_order = &state.cliques_by_order[clique_order_distribution.sample(rng)];
+    pub fn clique_swap<R: Rng>(state: &MarkovState, precomputed: &Precomputed, rng: &mut R, clique_order_distribution: &WeightedIndex<f64>) -> Self {
+        let cliques_of_fixed_order = &precomputed.cliques_by_order[clique_order_distribution.sample(rng)];
         let m1 = cliques_of_fixed_order.choose(rng).unwrap();
         let m2 = cliques_of_fixed_order.choose(rng).unwrap();
         
@@ -289,7 +332,7 @@ impl Transition {
         return Transition{change_edges};
     }
 
-    pub fn single_edge_flip<R: Rng>(state: &State, rng: &mut R) -> Self {
+    pub fn single_edge_flip<R: Rng>(state: &MarkovState, rng: &mut R) -> Self {
         if let Some([from, to]) = state.graph.sample_edge(rng) {
             if !state.graph.has_edge(to, from) { // its a single edge
                 return Transition{change_edges: vec![([from,to], false), ([to,from], true)]};
@@ -297,11 +340,11 @@ impl Transition {
         }
         return Transition{change_edges: vec![]};
     }
-    fn single_edge_flip_wrap<R: Rng>(state: &State, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
+    fn single_edge_flip_wrap<R: Rng>(state: &MarkovState, _: &Precomputed, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
         Self::single_edge_flip(state, rng)
     }
     
-    pub fn double_edge_move<R: Rng>(state: &State, rng: &mut R) -> Self {
+    pub fn double_edge_move<R: Rng>(state: &MarkovState, rng: &mut R) -> Self {
         // if there is no edge, return an empty transition below
         if let Some(double_edge) = state.graph.sample_double_edge(rng) {
             // FIXME: assert somewhere, that there are single edges.
@@ -323,7 +366,7 @@ impl Transition {
         }
         return Transition{change_edges: vec![]};
     }
-    fn double_edge_move_wrap<R: Rng>(state: &State, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
+    fn double_edge_move_wrap<R: Rng>(state: &MarkovState, _: &Precomputed, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
         Self::double_edge_move(state, rng)
     }
 }
