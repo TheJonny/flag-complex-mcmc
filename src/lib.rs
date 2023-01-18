@@ -26,7 +26,7 @@ pub struct EdgeInfo {
     ncliques_in_nbhd: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarkovState {
     pub graph: Graph,
     pub flag_count: Vec<usize>,
@@ -46,6 +46,7 @@ impl MarkovState {
 pub struct Precomputed {
     pub cliques_by_order: Vec<Vec<Vec<Node>>>,
     pub edge_neighborhood: HashMap<Edge, Vec<Node>>,
+    pub clique_order_distribution: WeightedIndex<f64>,
 }
 
 impl Precomputed {
@@ -65,7 +66,12 @@ impl Precomputed {
         println!("computing edge neighborhoods");
         let edge_neighborhood = compute_edge_neighborhoods(graph);
 
-        Precomputed { cliques_by_order, edge_neighborhood}
+        println!("we have the following number of maximal k-cliques {:?}", cliques_by_order.iter().map(|cs| cs.len()).collect::<Vec<usize>>());
+        let adjusted_clique_order = cliques_by_order.iter().map(|cs| (cs.len() as f64).powf(0.2)).collect::<Vec<f64>>();
+        let clique_order_distribution = WeightedIndex::new(adjusted_clique_order).unwrap();
+
+
+        Precomputed { cliques_by_order, edge_neighborhood, clique_order_distribution}
     }
 
     pub fn edgeset_neighborhood(&self, edges: &[Edge]) -> Vec<Node>{
@@ -174,8 +180,8 @@ impl Bounds {
 pub struct Parameters {
     pub bounds: Bounds,
     pub move_distribution: WeightedIndex<f64>,
-    pub clique_order_distribution: WeightedIndex<f64>,
     pub sample_distance: usize,
+    pub state_save_distance: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -207,7 +213,7 @@ impl<'pa, 'pc,  R: Rng> MCMCSampler<'pa, 'pc, R> {
         }
     }
     pub fn step(&mut self) -> &MarkovState{
-        let t = Transition::random_move(&self.vars.state, &self.precomputed, &mut self.vars.rng, &self.parameters.move_distribution, &self.parameters.clique_order_distribution);
+        let t = Transition::random_move(&self.vars.state, &self.precomputed, &mut self.vars.rng, &self.parameters.move_distribution);
         let counters = apply_transition(&mut self.vars.state, &t, self.precomputed);
         self.vars.sampled += 1;
         if self.parameters.bounds.check(&self.vars.state) {
@@ -248,15 +254,15 @@ pub struct Transition {
 }
 
 impl Transition {
-    pub fn random_move<R: Rng>(state: &MarkovState, precomputed: &Precomputed, rng: &mut R, move_distribution: &WeightedIndex<f64>, clique_order_distribution: &WeightedIndex<f64>) -> Self {
+    pub fn random_move<R: Rng>(state: &MarkovState, precomputed: &Precomputed, rng: &mut R, move_distribution: &WeightedIndex<f64>) -> Self {
         let potential_moves = [Transition::single_edge_flip_wrap, Transition::double_edge_move_wrap,
                                 Transition::clique_permute, Transition::clique_swap];
         let chosen_move = potential_moves[move_distribution.sample(rng)];
-        return chosen_move(state, precomputed, rng, clique_order_distribution);
+        return chosen_move(state, precomputed, rng);
     }
 
-    pub fn clique_permute<R: Rng>(state: &MarkovState, precomputed: &Precomputed, rng: &mut R, clique_order_distribution: &WeightedIndex<f64>) -> Self {
-        let cliques_of_fixed_order = &precomputed.cliques_by_order[clique_order_distribution.sample(rng)];
+    pub fn clique_permute<R: Rng>(state: &MarkovState, precomputed: &Precomputed, rng: &mut R) -> Self {
+        let cliques_of_fixed_order = &precomputed.cliques_by_order[precomputed.clique_order_distribution.sample(rng)];
         let cl = cliques_of_fixed_order.choose(rng).unwrap();
 
         let perm = random_perm(0,cl.len(), rng);
@@ -275,8 +281,8 @@ impl Transition {
         return Transition {change_edges};
     }
 
-    pub fn clique_swap<R: Rng>(state: &MarkovState, precomputed: &Precomputed, rng: &mut R, clique_order_distribution: &WeightedIndex<f64>) -> Self {
-        let cliques_of_fixed_order = &precomputed.cliques_by_order[clique_order_distribution.sample(rng)];
+    pub fn clique_swap<R: Rng>(state: &MarkovState, precomputed: &Precomputed, rng: &mut R) -> Self {
+        let cliques_of_fixed_order = &precomputed.cliques_by_order[precomputed.clique_order_distribution.sample(rng)];
         let m1 = cliques_of_fixed_order.choose(rng).unwrap();
         let m2 = cliques_of_fixed_order.choose(rng).unwrap();
         
@@ -341,7 +347,7 @@ impl Transition {
         }
         return Transition{change_edges: vec![]};
     }
-    fn single_edge_flip_wrap<R: Rng>(state: &MarkovState, _: &Precomputed, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
+    fn single_edge_flip_wrap<R: Rng>(state: &MarkovState, _: &Precomputed, rng: &mut R) -> Self {
         Self::single_edge_flip(state, rng)
     }
     
@@ -367,7 +373,7 @@ impl Transition {
         }
         return Transition{change_edges: vec![]};
     }
-    fn double_edge_move_wrap<R: Rng>(state: &MarkovState, _: &Precomputed, rng: &mut R, _: &WeightedIndex<f64>) -> Self {
+    fn double_edge_move_wrap<R: Rng>(state: &MarkovState, _: &Precomputed, rng: &mut R) -> Self {
         Self::double_edge_move(state, rng)
     }
 }
