@@ -180,8 +180,8 @@ impl Bounds {
 pub struct Parameters {
     pub bounds: Bounds,
     pub move_distribution: WeightedIndex<f64>,
-    pub sample_distance: usize,
-    pub state_save_distance: usize,
+    pub sample_distance: u64,
+    pub state_save_distance: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -226,6 +226,7 @@ impl<'pa, 'pc,  R: Rng> MCMCSampler<'pa, 'pc, R> {
     }
 
     pub const fn step_number(&self) -> u64 { self.vars.sampled }
+    pub const fn state(&self) -> &MarkovState { &self.vars.state }
 
     pub fn acceptance_ratio(&self) -> f64 {
         return self.vars.accepted as f64 / self.vars.sampled as f64;

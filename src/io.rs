@@ -48,7 +48,8 @@ pub fn save_flag_file<G: DirectedGraph>(fname:&str, graph:&G) -> std::io::Result
 
 
 // Save/Restore state (serde/bincode)
-pub fn save_state<R: Rng+Serialize>(fname:&str, sampler:&MCMCSampler<R>) -> anyhow::Result<()> {
+pub fn save_state<R: Rng+Serialize>(state_dir: &str, label: &str, seed: u64, sampler:&MCMCSampler<R>) -> anyhow::Result<()> {
+    let fname = format!("{state_dir}/sampler-{label}-{seed:03}.state");
     let mut f = std::io::BufWriter::new(File::create(format!("{fname}.tmp")).unwrap());
     sampler.save(&mut f)?;
     f.flush()?;
@@ -56,15 +57,35 @@ pub fn save_state<R: Rng+Serialize>(fname:&str, sampler:&MCMCSampler<R>) -> anyh
     return Ok(());
 }
 
-pub fn load_state<'pa, 'pc, R: Rng+DeserializeOwned>(fname:&str, parameters: &'pa Parameters, precomputed: &'pc Precomputed,) -> anyhow::Result<MCMCSampler<'pa, 'pc, R>> {
+pub fn load_state<'pa, 'pc, R: Rng+DeserializeOwned>(state_dir: &str, label: &str, seed: u64, parameters: &'pa Parameters, precomputed: &'pc Precomputed,) -> anyhow::Result<MCMCSampler<'pa, 'pc, R>> {
+    let fname = format!("{state_dir}/sampler-{label}-{seed:03}.state");
     let mut f = std::io::BufReader::new(File::open(fname).unwrap());
     let sampler = MCMCSampler::load(&mut f, parameters, precomputed)?;
     return Ok(sampler);
 }
 
+// Save/Restore shared state (serde/bincode)
+pub fn save_shared(state_dir: &str, label: &str, parameters: &Parameters, precomputed: &Precomputed)
+        -> anyhow::Result<()>
+{
+    let fname = format!("{state_dir}/shared-{label}.state");
+    let mut f = std::io::BufWriter::new(File::create(format!("{fname}.tmp")).unwrap());
+    bincode::serialize_into(&mut f, &(parameters, precomputed))?;
+    f.flush()?;
+    std::fs::rename(format!("{fname}.tmp"), fname).expect("moving temp state file to correct location failed");
+    return Ok(());
+}
+
+pub fn load_shared(state_dir: &str, label: &str) -> anyhow::Result<(Parameters, Precomputed)> {
+    let fname = format!("{state_dir}/shared-{label}.state");
+    let mut f = std::io::BufReader::new(File::open(fname).unwrap());
+    let data = bincode::deserialize_from(&mut f)?;
+    return Ok(data);
+}
+
 
 // HDF5
-pub fn save_to_hdf<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64, sample_number:usize, graph:&G, flag_count:&Vec<usize>) -> hdf5::Result<()> {
+pub fn save_to_hdf<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64, sample_number:u64, graph:&G, flag_count:&Vec<usize>) -> hdf5::Result<()> {
     let file = hdf5::File::open_rw(format!("{state_store_dir}/{label}-{seed:03}.hdf5"))?;
     let groupname = format!("/{seed:03}/{sample_number:06}");
     if file.link_exists(&groupname) {

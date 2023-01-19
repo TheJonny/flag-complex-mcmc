@@ -32,7 +32,7 @@ struct Args{
        
     /// number of samples to draw
     #[clap(short, long, default_value_t = 1000)]
-    number_of_samples: usize,
+    number_of_samples: u64,
 
     /// only use simple single edge flips and double edge moves
     #[clap(long)]
@@ -52,7 +52,7 @@ struct Args{
 
     /// sample_distance: number of steps between too samples
     #[clap(long, default_value_t = 0)]
-    sample_distance: usize,
+    sample_distance: u64,
 
 
     // Caching, saving, restoring
@@ -74,11 +74,11 @@ struct Args{
 
     /// state_store_dir: directory where to store saved states
     #[clap(long, default_value = "./state/")]
-    state_store_dir: String,
+    state_dir: String,
 
     /// state_save_interval: Interval in which to save states
     #[clap(long, default_value_t = 100)]
-    state_save_interval: usize,
+    state_save_distance: u64,
 
     /// save output as edge list bit array instead of hdf5
     #[clap(long)]
@@ -105,7 +105,7 @@ fn initialize_new(args: &Args) -> (Parameters, Precomputed, MarkovState) {
         RELAXED_BOUNDS
     };
     let move_distribution: WeightedIndex<f64> = WeightedIndex::new(if args.simple { MOVE_DISTRIBUTION_SIMPLE} else { MOVE_DISTRIBUTION }).unwrap();
-    let sample_distance = if args.sample_distance == 0 {(2. * st.flag_count[1] as f64 * (st.flag_count[1] as f64).log2()).ceil() as usize} else {args.sample_distance};
+    let sample_distance = if args.sample_distance == 0 {(2. * st.flag_count[1] as f64 * (st.flag_count[1] as f64).log2()).ceil() as u64} else {args.sample_distance};
     println!("The sampling distance was set to {sample_distance}.");
 
     let parameters = Parameters {
@@ -117,7 +117,7 @@ fn initialize_new(args: &Args) -> (Parameters, Precomputed, MarkovState) {
 fn main() {
     let args = Args::parse();
     println!("{:?}", &args.seeds);
-    fs::create_dir_all(&args.state_store_dir).expect("could not create state storage directory");
+    fs::create_dir_all(&args.state_dir).expect("could not create state storage directory");
     fs::create_dir_all(&args.samples_store_dir).expect("could not create samples storage directory");
 
     //let save_hdf5: bool = ! args.save_bits;
@@ -127,20 +127,20 @@ fn main() {
     let parameters: Parameters;
     let samplers : Vec<MCMCSampler<Xoshiro256StarStar>>;
     if args.resume {
-        (precomputed, parameters) = io::load_shared(&args.state_dir, &args.label);
+        (parameters, precomputed) = io::load_shared(&args.state_dir, &args.label).unwrap();
         samplers = args.seeds.iter()
-            .map(|&seed| io::load_state(&args.state_dir, &args.label, seed).expect("unable to load state"))
+            .map(|&seed| io::load_state(&args.state_dir, &args.label, seed, &parameters, &precomputed).expect("unable to load state"))
             .collect();
     } else {
         let start_state;
         (parameters, precomputed, start_state) = initialize_new(&args);
-        io::save_shared(&args.state_dir, &args.label, &parameters, &precomputed);
+        io::save_shared(&args.state_dir, &args.label, &parameters, &precomputed).unwrap();
         for &seed in &args.seeds {
-                io::new_hdf_file(&args.samples_store_dir, &args.label, seed, &start_state.graph).unwrap();
+                io::new_hdf_file(&args.samples_store_dir, &args.label, seed, /*&start_state.graph*/).unwrap();
         }
         samplers = args.seeds.iter()
             .map(|&seed| {
-                let rng = Xoshiro256StarStar::seed_from_u64(args.seed);
+                let rng = Xoshiro256StarStar::seed_from_u64(seed);
                 MCMCSampler::new(start_state.clone(), rng, &parameters, &precomputed)
             })
             .collect();
@@ -150,22 +150,24 @@ fn main() {
     //    Some(io::BitOutput::new(&sampler.state.graph, &format!("{}/{}-{:03}", args.samples_store_dir, args.label, args.seed)).unwrap())
     //} else { None };
     std::thread::scope(|scope| {
-        for (sampler, &seed) in samplers.iter().zip(args.seeds.iter()) {
-            scope.spawn(||{
+        for (mut sampler, seed) in samplers.into_iter().zip(args.seeds.iter().cloned()) {
+            let args = &args; // dont move args into the thread
+            scope.spawn(move ||{
                 // run the sampler for args.number_of_stamples steps.
                 // save state
                 loop {
-                    let s = sampler.step();
+                    sampler.step();
                     if sampler.step_number() % parameters.state_save_distance == 0 {
                         println!("saving state in step {}", sampler.step_number());
-                        io::save_state(&format!("{state_store_dir}/sampler-{l}-{s:03}.state", state_store_dir = args.state_store_dir, l=args.label, s=seed), &sampler).unwrap();
+                        io::save_state(&args.state_dir, &args.label, seed, &sampler).unwrap();
                         // save state
                     }
-                    if sampler.step_number % parameters.sample_distance == 0 {
+                    if sampler.step_number() % parameters.sample_distance == 0 {
                         let output_index = sampler.step_number() / parameters.sample_distance;
                         // write output
-                        println!("flag count: {:?}", s.flag_count);
+                        println!("flag count: {:?}", sampler.state().flag_count);
                         dbg!(sampler.acceptance_ratio());
+                        let s = sampler.state();
                         io::save_to_hdf(&args.samples_store_dir, &args.label, seed, output_index, &s.graph, &s.flag_count).unwrap();
                     }
                 }
