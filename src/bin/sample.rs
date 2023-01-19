@@ -64,7 +64,7 @@ struct Args{
                                                     "simple",
                                                     //"save_bits",
                                                     "sample_distance",
-                                                    "state_save_interval",
+                                                    "state_save_distance",
                                                     ]))]
     resume: bool,
 
