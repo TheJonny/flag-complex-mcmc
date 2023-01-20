@@ -116,7 +116,6 @@ fn initialize_new(args: &Args) -> (Parameters, Precomputed, MarkovState) {
 
 fn main() {
     let args = Args::parse();
-    println!("{:?}", &args.seeds);
     fs::create_dir_all(&args.state_dir).expect("could not create state storage directory");
     fs::create_dir_all(&args.samples_store_dir).expect("could not create samples storage directory");
 
