@@ -178,7 +178,8 @@ impl Bounds {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Parameters {
-    pub bounds: Bounds,
+    pub target_bounds: Bounds,
+    pub relaxed_bounds: Bounds,
     pub move_distribution: WeightedIndex<f64>,
     pub sample_distance: u64,
     pub state_save_distance: u64,
@@ -216,7 +217,7 @@ impl<'pa, 'pc,  R: Rng> MCMCSampler<'pa, 'pc, R> {
         let t = Transition::random_move(&self.vars.state, &self.precomputed, &mut self.vars.rng, &self.parameters.move_distribution);
         let counters = apply_transition(&mut self.vars.state, &t, self.precomputed);
         self.vars.sampled += 1;
-        if self.parameters.bounds.check(&self.vars.state) {
+        if self.parameters.relaxed_bounds.check(&self.vars.state) {
             self.vars.accepted += 1;
         }
         else {

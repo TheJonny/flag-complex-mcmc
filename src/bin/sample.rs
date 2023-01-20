@@ -99,7 +99,7 @@ fn initialize_new(args: &Args) -> (Parameters, Precomputed, MarkovState) {
     } else {
         TARGET_BOUNDS
     };
-    let bounds = if RELAXED_BOUNDS.flag_count_min.len() == 0 || RELAXED_BOUNDS.flag_count_max.len() == 0 {
+    let relaxed_bounds = if RELAXED_BOUNDS.flag_count_min.len() == 0 || RELAXED_BOUNDS.flag_count_max.len() == 0 {
         Bounds::calculate(&st, target_bounds.clone())
     } else {
         RELAXED_BOUNDS
@@ -109,7 +109,7 @@ fn initialize_new(args: &Args) -> (Parameters, Precomputed, MarkovState) {
     println!("The sampling distance was set to {sample_distance}.");
 
     let parameters = Parameters {
-        bounds, move_distribution, sample_distance, state_save_distance: args.state_save_distance
+        target_bounds, relaxed_bounds, move_distribution, sample_distance, state_save_distance: args.state_save_distance
     };
     return (parameters, precomputed, st);
 }
@@ -136,7 +136,7 @@ fn main() {
         (parameters, precomputed, start_state) = initialize_new(&args);
         io::save_shared(&args.state_dir, &args.label, &parameters, &precomputed).unwrap();
         for &seed in &args.seeds {
-                io::new_hdf_file(&args.samples_store_dir, &args.label, seed, &start_state.graph).unwrap();
+                io::new_hdf_file(&args.samples_store_dir, &args.label, seed, &start_state.graph, &parameters).unwrap();
         }
         samplers = args.seeds.iter()
             .map(|&seed| {
@@ -144,6 +144,7 @@ fn main() {
                 MCMCSampler::new(start_state.clone(), rng, &parameters, &precomputed)
             })
             .collect();
+        // save state
     }
 
     //let mut bit_output: Option<io::BitOutput> = if args.save_bits {
@@ -153,14 +154,12 @@ fn main() {
         for (mut sampler, seed) in samplers.into_iter().zip(args.seeds.iter().cloned()) {
             let args = &args; // dont move args into the thread
             scope.spawn(move ||{
-                // run the sampler for args.number_of_stamples steps.
-                // save state
-                loop {
+                // run the sampler for args.number_of_samples steps.
+                for _ in 0..(args.number_of_samples * parameters.sample_distance) {
                     sampler.step();
                     if sampler.step_number() % parameters.state_save_distance == 0 {
                         println!("saving state in step {}", sampler.step_number());
                         io::save_state(&args.state_dir, &args.label, seed, &sampler).unwrap();
-                        // save state
                     }
                     if sampler.step_number() % parameters.sample_distance == 0 {
                         let output_index = sampler.step_number() / parameters.sample_distance;

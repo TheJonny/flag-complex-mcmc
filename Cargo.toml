@@ -8,6 +8,7 @@ edition = "2021"
 default-run = "sample"
 
 [dependencies]
+anyhow = "*"
 array_tool = "*"
 libc = "*"
 rand = { version = "*", features = ["serde1"] }
@@ -23,7 +24,7 @@ ndarray = "*"
 bincode = "*"
 rand_xoshiro = { version = "*", features = ['serde1'] }
 serde = { version = "1.0", features = ["derive"] }
-anyhow = "*"
+serde_json = "*"
 
 flag-complex = { git = "https://github.com/TheJonny/flag-complex" }
 

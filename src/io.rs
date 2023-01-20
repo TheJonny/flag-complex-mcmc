@@ -7,6 +7,7 @@ use crate::{MCMCSampler, Parameters, Precomputed};
 use rand::Rng;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde_json;
 
 use hdf5;
 use ndarray;
@@ -104,8 +105,8 @@ pub fn save_to_hdf<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64,
     Ok(())
 }
 
-pub fn new_hdf_file<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64, graph:&G) -> hdf5::Result<()> {
-    // create new hdf5 file: TODO: error if it exists?
+pub fn new_hdf_file<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64, graph:&G, parameters:&Parameters) -> hdf5::Result<()> {
+    // create new hdf5 file:
     let filename = format!("{state_store_dir}/{label}-{seed:03}.hdf5");
     hdf5::File::create(&filename)?;
 
@@ -133,7 +134,8 @@ pub fn new_hdf_file<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64
     let s = VarLenAscii::from_ascii(&info).expect("Please refrain from using non-ascii command line input or fix the code yourself");
     file.new_dataset::<VarLenAscii>().create("info")?.write_scalar(&s)?;
     // all kinds of derived parameters useful for later analysis
-    // TODO
+    let parameters_json_string = serde_json::ser::to_string(parameters).unwrap();
+    file.new_dataset::<VarLenAscii>().create("parameters")?.write_scalar(&VarLenAscii::from_ascii(&parameters_json_string).unwrap())?;
     
     return Ok(());
 }
