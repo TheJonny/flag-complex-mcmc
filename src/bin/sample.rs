@@ -23,7 +23,7 @@ const MOVE_DISTRIBUTION:[f64; 4] = [0.1, 0.1, 0.6, 0.2];
 struct Args{
     // Sampler configuration
     /// flag input file location
-    #[clap(short, long)]
+    #[clap(short, long, required_unless_present("resume"), default_value="")]
     input: String,
 
     /// target relaxation (percentage)
