@@ -77,7 +77,7 @@ struct Args{
     state_dir: String,
 
     /// state_save_interval: Interval in which to save states
-    #[clap(long, default_value_t = 100)]
+    #[clap(long, default_value_t = 1000000)]
     state_save_distance: u64,
 
     /// save output as edge list bit array instead of hdf5
