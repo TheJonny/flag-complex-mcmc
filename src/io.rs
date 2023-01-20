@@ -13,6 +13,9 @@ use ndarray;
 
 use crate::Edge;
 
+use git_version::git_version;
+const GIT_VERSION: &str = git_version!();
+
 // Flag File
 pub fn read_flag_file<G: DirectedGraphNew>(fname:&str) -> G {
     let mut file = File::open(fname).expect("could not find .flag input file");
@@ -101,9 +104,37 @@ pub fn save_to_hdf<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64,
     Ok(())
 }
 
-pub fn new_hdf_file(state_store_dir:&str, label:&str, seed:u64) -> hdf5::Result<()> {
-    hdf5::File::create(format!("{state_store_dir}/{label}-{seed:03}.hdf5"))?;
-    //TODO: Add metadata/comment to this file
+pub fn new_hdf_file<G: DirectedGraph>(state_store_dir:&str, label:&str, seed:u64, graph:&G) -> hdf5::Result<()> {
+    // create new hdf5 file: TODO: error if it exists?
+    let filename = format!("{state_store_dir}/{label}-{seed:03}.hdf5");
+    hdf5::File::create(&filename)?;
+
+    // initialize it with original graph and data useful for reproducing or analyzing it
+    let file = hdf5::File::open_rw(&filename)?;
+    // original starting graph
+    let group = file.group("/")?;
+    let builder = group.new_dataset_builder();
+    let mut edges = graph.edges();
+    edges.sort_unstable();
+    builder.deflate(4).with_data(&ndarray::arr2(&edges)).create("orig_graph_edgelist")?;
+    // reproduction string containing git version and command line invocation
+    use hdf5::types::VarLenAscii;
+    let info = format!(
+        "The samples here were created by \n\
+        \tflag-complex-mcmc (https://github.com/TheJonny/flag-complex-mcmc)\n\
+        with the command line invocation\n\
+        \t{:?}\n\
+        with the git version of the sampler at\n\
+        \t{}.\n\
+        For all the derived parameters like bounds and sampling distance,\n\
+        see dataset 'parameters' which contains a JSON.\n\
+        The original starting graph is given in the dataset 'orig_graph_edgelist'.",
+        std::env::args().collect::<Vec<String>>() , GIT_VERSION);
+    let s = VarLenAscii::from_ascii(&info).expect("Please refrain from using non-ascii command line input or fix the code yourself");
+    file.new_dataset::<VarLenAscii>().create("info")?.write_scalar(&s)?;
+    // all kinds of derived parameters useful for later analysis
+    // TODO
+    
     return Ok(());
 }
 

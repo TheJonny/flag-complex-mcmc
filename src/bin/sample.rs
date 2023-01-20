@@ -136,7 +136,7 @@ fn main() {
         (parameters, precomputed, start_state) = initialize_new(&args);
         io::save_shared(&args.state_dir, &args.label, &parameters, &precomputed).unwrap();
         for &seed in &args.seeds {
-                io::new_hdf_file(&args.samples_store_dir, &args.label, seed, /*&start_state.graph*/).unwrap();
+                io::new_hdf_file(&args.samples_store_dir, &args.label, seed, &start_state.graph).unwrap();
         }
         samplers = args.seeds.iter()
             .map(|&seed| {

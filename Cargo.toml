@@ -16,6 +16,7 @@ rayon = "*"
 indexmap = {version = "*", features = ["serde"] }
 seahash = "*"
 #output hdf5 saving
+git-version = "*"
 hdf5 = "*"
 ndarray = "*"
 #state saving
