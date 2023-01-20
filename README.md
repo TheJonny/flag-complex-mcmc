@@ -44,3 +44,4 @@ for other features, call
 - [ ] split normal run and resume
   - [x] `--resume` conflicts with everything except `--label`, `--seeds`, `--state_save_dir`
   - [ ] normal run should save everything into state
+- [ ] multithread initialization: initial clique search should use as many threads as seeds supplied
