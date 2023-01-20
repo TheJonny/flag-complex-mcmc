@@ -58,14 +58,14 @@ struct Args{
     // Caching, saving, restoring
     /// continue: load given serde file and continue from there.
     /// Takes precedence over almost all other options if present.
-    #[clap(short, long, default_value_t = false, conflicts_with_all(&[
-                                                    "input",
-                                                    "target_relaxation",
-                                                    "simple",
-                                                    //"save_bits",
-                                                    "sample_distance",
-                                                    "state_save_distance",
-                                                    ]))]
+    #[clap(short, long, conflicts_with_all(&[
+                                             "input",
+                                             "target-relaxation",
+                                             "simple",
+                                             //"save_bits",
+                                             "sample-distance",
+                                             "state-save-distance",
+                                             ]))]
     resume: bool,
 
     /// samples_store_dir: directory where to store hdf5 files with samples
