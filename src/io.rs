@@ -53,11 +53,10 @@ pub fn save_flag_file<G: DirectedGraph>(fname:&str, graph:&G) -> std::io::Result
 
 // Save/Restore state (serde/bincode)
 pub fn save_state<R: Rng+Serialize>(state_dir: &str, label: &str, seed: u64, sampler:&MCMCSampler<R>) -> anyhow::Result<()> {
-    let fname = format!("{state_dir}/sampler-{label}-{seed:03}.state");
-    let mut f = std::io::BufWriter::new(File::create(format!("{fname}.tmp")).unwrap());
+    let mut f = std::io::BufWriter::new(tempfile::NamedTempFile::new_in(state_dir)?);
     sampler.save(&mut f)?;
-    f.flush()?;
-    std::fs::rename(format!("{fname}.tmp"), fname).expect("moving temp state file to correct location failed");
+    let fname = format!("{state_dir}/sampler-{label}-{seed:03}.state");
+    f.into_inner()?.persist(&fname)?;
     return Ok(());
 }
 
@@ -72,11 +71,11 @@ pub fn load_state<'pa, 'pc, R: Rng+DeserializeOwned>(state_dir: &str, label: &st
 pub fn save_shared(state_dir: &str, label: &str, parameters: &Parameters, precomputed: &Precomputed)
         -> anyhow::Result<()>
 {
-    let fname = format!("{state_dir}/shared-{label}.state");
-    let mut f = std::io::BufWriter::new(File::create(format!("{fname}.tmp")).unwrap());
+    let mut f = std::io::BufWriter::new(tempfile::NamedTempFile::new_in(state_dir)?);
     bincode::serialize_into(&mut f, &(parameters, precomputed))?;
     f.flush()?;
-    std::fs::rename(format!("{fname}.tmp"), fname).expect("moving temp state file to correct location failed");
+    let fname = format!("{state_dir}/shared-{label}.state");
+    f.into_inner()?.persist(&fname)?;
     return Ok(());
 }
 
